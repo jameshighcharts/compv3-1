@@ -3,6 +3,33 @@ import { NextResponse } from "next/server";
 import { getOpportunityPipelinePayload } from "@backend/domains/sales";
 
 const SUCCESS_CACHE_CONTROL = "s-maxage=120, stale-while-revalidate=300";
+const ROUTE_TIMEOUT_MS = Number(process.env.SF_ROUTE_TIMEOUT_MS ?? 15_000);
+
+class RouteTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RouteTimeoutError";
+  }
+}
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new RouteTimeoutError(`${label} timed out after ${timeoutMs}ms.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+};
 
 const getRequestId = (request: Request): string =>
   request.headers.get("x-request-id") ??
@@ -12,6 +39,7 @@ const getRequestId = (request: Request): string =>
 const toErrorResponse = (
   requestId: string,
   message: string,
+  status: number,
 ): NextResponse =>
   NextResponse.json(
     {
@@ -23,7 +51,7 @@ const toErrorResponse = (
       },
     },
     {
-      status: 500,
+      status,
       headers: {
         "Cache-Control": "no-store",
       },
@@ -35,7 +63,11 @@ export const GET = async (request: Request): Promise<NextResponse> => {
   const startedAt = Date.now();
 
   try {
-    const { payload, cacheHit } = await getOpportunityPipelinePayload();
+    const { payload, cacheHit } = await withTimeout(
+      getOpportunityPipelinePayload(),
+      ROUTE_TIMEOUT_MS,
+      "Salesforce pipeline request",
+    );
 
     console.info(
       JSON.stringify({
@@ -57,6 +89,7 @@ export const GET = async (request: Request): Promise<NextResponse> => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Salesforce error";
+    const status = error instanceof RouteTimeoutError ? 504 : 500;
 
     console.error(
       JSON.stringify({
@@ -65,9 +98,10 @@ export const GET = async (request: Request): Promise<NextResponse> => {
         requestId,
         latencyMs: Date.now() - startedAt,
         message,
+        status,
       }),
     );
 
-    return toErrorResponse(requestId, message);
+    return toErrorResponse(requestId, message, status);
   }
 };
