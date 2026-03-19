@@ -1,0 +1,683 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@highcharts/grid-pro/css/grid-pro.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #fff;
+  --foreground: #020817;
+  --card: #fff;
+  --card-foreground: #020817;
+  --popover: #fff;
+  --popover-foreground: #020817;
+  --primary: #0f172a;
+  --primary-foreground: #f8fafc;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #ef4444;
+  --destructive-foreground: #f8fafc;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #020817;
+  --chart-1: #9198F0;
+  --chart-2: #6DDFA0;
+  --chart-3: #F7A85E;
+  --chart-4: #7DBFCE;
+  --chart-5: #EBD95F;
+  --radius: 0.6rem;
+  --sidebar-background: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+.dark {
+  /* Page surface — slightly deeper navy so cards can lift above it */
+  --background: #070d1a;
+  --foreground: #f1f5f9;
+
+  /* Cards sit one layer above the page — critical for depth perception */
+  --card: #0e1829;
+  --card-foreground: #f1f5f9;
+
+  /* Popovers & dropdowns sit above cards */
+  --popover: #162033;
+  --popover-foreground: #f1f5f9;
+
+  --primary: #f1f5f9;
+  --primary-foreground: #0f172a;
+
+  /* Subtle secondary surfaces — slightly lifted from page */
+  --secondary: #172235;
+  --secondary-foreground: #f1f5f9;
+  --muted: #131f33;
+  /* Brighter secondary text — slate-400 on #070d1a gives comfortable contrast */
+  --muted-foreground: #94a3b8;
+
+  --accent: #172235;
+  --accent-foreground: #f1f5f9;
+
+  --destructive: #7f1d1d;
+
+  /* Stronger border — now clearly differentiates cards from the page */
+  --border: #1e2d45;
+  --input: #172235;
+  --ring: #cbd5e1;
+
+  /* Chart palette — brightened for dark backgrounds; keeps hue identity */
+  --chart-1: #9198F0;   /* violet  — was #8087E8 */
+  --chart-2: #6DDFA0;   /* mint    — was #A3EDBA */
+  --chart-3: #F7A85E;   /* orange  — was #F19E53 */
+  --chart-4: #7DBFCE;   /* teal    — was #6699A1 */
+  --chart-5: #EBD95F;   /* yellow  — was #E1D369 */
+
+  /* Tell the browser this context is dark: scrollbars, inputs, selects */
+  color-scheme: dark;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar-background);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Inter", "Inter Fallback", system-ui, sans-serif;
+  }
+}
+
+.ra-activity-grid .hcg-container {
+  --hcg-border-width: 0;
+  --hcg-padding: 0;
+  --hcg-header-vertical-padding: 10px;
+  --hcg-header-horizontal-padding: 22px;
+  --hcg-vertical-padding: 14px;
+  --hcg-horizontal-padding: 22px;
+  --hcg-font-size: 16px;
+  --hcg-header-font-size: 14px;
+  --hcg-header-font-weight: 500;
+  --hcg-row-border-color: var(--border);
+  --hcg-header-row-border-color: var(--border);
+  --hcg-row-even-background: transparent;
+  --hcg-row-hover-background: color-mix(in srgb, var(--accent) 55%, transparent);
+  --hcg-header-color: var(--muted-foreground);
+  --hcg-color: var(--foreground);
+  --hcg-background: transparent;
+}
+
+.ra-activity-grid .hcg-table th,
+.ra-activity-grid .hcg-table td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.ra-activity-grid .ra-grid-cell {
+  color: var(--foreground);
+}
+
+.ra-activity-grid .ra-user-cell {
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.ra-activity-grid .ra-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ra-activity-grid .ra-user-avatar {
+  display: inline-flex;
+  height: 36px;
+  width: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--muted) 85%, transparent);
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ra-activity-grid .ra-user-copy {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.ra-activity-grid .ra-user-name {
+  line-height: 1.1;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.ra-activity-grid .ra-user-email {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.ra-activity-grid .ra-meta-cell {
+  color: var(--muted-foreground);
+}
+
+.ra-activity-grid .ra-amount-cell {
+  text-align: right;
+  font-weight: 600;
+}
+
+.ra-activity-grid .ra-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  padding: 3px 10px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.ra-activity-grid .ra-status-invited {
+  border-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+  color: var(--foreground);
+}
+
+.ra-activity-grid .ra-status-suspended {
+  border-color: color-mix(in srgb, #f97316 32%, transparent);
+  background-color: color-mix(in srgb, #f97316 12%, transparent);
+  color: #ea580c;
+}
+
+.ra-activity-grid .ra-status-new {
+  border-color: color-mix(in srgb, #10b981 30%, transparent);
+  background-color: color-mix(in srgb, #10b981 12%, transparent);
+  color: #059669;
+}
+
+.ra-activity-grid .ra-status-delete {
+  border-color: color-mix(in srgb, #ef4444 30%, transparent);
+  background-color: color-mix(in srgb, #ef4444 12%, transparent);
+  color: #ef4444;
+}
+
+/* ─── Sales Pipeline grid ──────────────────────────────────────────────────── */
+
+.sp-pipeline-grid .hcg-container {
+  --hcg-border-width: 0;
+  --hcg-padding: 0;
+  --hcg-header-vertical-padding: 10px;
+  --hcg-header-horizontal-padding: 20px;
+  --hcg-vertical-padding: 13px;
+  --hcg-horizontal-padding: 20px;
+  --hcg-font-size: 14px;
+  --hcg-header-font-size: 13px;
+  --hcg-header-font-weight: 500;
+  --hcg-row-border-color: var(--border);
+  --hcg-header-row-border-color: var(--border);
+  --hcg-row-even-background: transparent;
+  --hcg-row-hover-background: color-mix(in srgb, var(--accent) 55%, transparent);
+  --hcg-header-color: var(--muted-foreground);
+  --hcg-color: var(--foreground);
+  --hcg-background: transparent;
+}
+
+.sp-pipeline-grid .hcg-table th,
+.sp-pipeline-grid .hcg-table td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.sp-pipeline-grid .sp-grid-cell {
+  color: var(--foreground);
+}
+
+.sp-pipeline-grid .sp-meta-cell {
+  color: var(--muted-foreground);
+}
+
+.sp-pipeline-grid .sp-amount-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stage badge */
+.sp-pipeline-grid .sp-stage-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  padding: 3px 10px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.sp-pipeline-grid .sp-stage-scoping {
+  border-color: color-mix(in srgb, #6366f1 28%, transparent);
+  background-color: color-mix(in srgb, #6366f1 10%, transparent);
+  color: #6366f1;
+}
+
+.sp-pipeline-grid .sp-stage-proposal {
+  border-color: color-mix(in srgb, #f97316 28%, transparent);
+  background-color: color-mix(in srgb, #f97316 10%, transparent);
+  color: #ea580c;
+}
+
+.sp-pipeline-grid .sp-stage-committed {
+  border-color: color-mix(in srgb, #10b981 28%, transparent);
+  background-color: color-mix(in srgb, #10b981 10%, transparent);
+  color: #059669;
+}
+
+.sp-pipeline-grid .sp-stage-won {
+  border-color: color-mix(in srgb, #10b981 30%, transparent);
+  background-color: color-mix(in srgb, #10b981 12%, transparent);
+  color: #059669;
+}
+
+/* Won deal text accent (used in Latest Sales grid) */
+.sp-pipeline-grid .sp-stage-won-text {
+  color: #059669;
+  font-weight: 600;
+}
+
+/* Large deal highlight (> $200K) */
+.sp-pipeline-grid .sp-deal-large {
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+/* Probability color coding */
+.sp-pipeline-grid .sp-prob-high   { color: #059669; font-weight: 600; }
+.sp-pipeline-grid .sp-prob-medium { color: #d97706; font-weight: 600; }
+.sp-pipeline-grid .sp-prob-low    { color: #ef4444; font-weight: 600; }
+
+/* ── Daily Scorecards grid cells ──────────────────────────────────────────── */
+.sc-grid-cell {
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Full summary table — uses CSS variables to match the app theme */
+.sc-summary-card {
+  background: var(--card);
+}
+
+.sc-summary-grid .hcg-container {
+  --hcg-border-width: 0;
+  --hcg-padding: 0;
+  --hcg-header-vertical-padding: 9px;
+  --hcg-header-horizontal-padding: 10px;
+  --hcg-vertical-padding: 11px;
+  --hcg-horizontal-padding: 10px;
+  --hcg-font-size: 14px;
+  --hcg-header-font-size: 13px;
+  --hcg-header-font-weight: 600;
+  --hcg-row-border-color: var(--border);
+  --hcg-header-row-border-color: var(--border);
+  --hcg-row-even-background: transparent;
+  --hcg-row-hover-background: transparent;
+  --hcg-header-color: var(--muted-foreground);
+  --hcg-color: var(--foreground);
+  --hcg-background: transparent;
+}
+
+.sc-summary-grid .hcg-table th,
+.sc-summary-grid .hcg-table td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.sc-summary-grid .hcg-table thead th {
+  background: var(--muted);
+}
+
+.sc-summary-grid .hcg-table tbody tr:last-child td {
+  background: var(--muted);
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+}
+
+.sc-summary-grid .sc-summary-cell {
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-summary-grid .sc-summary-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.sc-summary-grid .sc-summary-segment-dot {
+  height: 10px;
+  width: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Segment colours aligned with the chart palette (chartColor index) */
+.sc-summary-grid .sc-summary-segment-low {        /* chartColor(3) — teal */
+  color: #7DBFCE;
+}
+.sc-summary-grid .sc-summary-segment-low .sc-summary-segment-dot {
+  background: #7DBFCE;
+}
+
+.sc-summary-grid .sc-summary-segment-medium {     /* chartColor(1) — mint */
+  color: #6DDFA0;
+}
+.sc-summary-grid .sc-summary-segment-medium .sc-summary-segment-dot {
+  background: #6DDFA0;
+}
+
+.sc-summary-grid .sc-summary-segment-high {       /* chartColor(2) — orange */
+  color: #F7A85E;
+}
+.sc-summary-grid .sc-summary-segment-high .sc-summary-segment-dot {
+  background: #F7A85E;
+}
+
+.sc-summary-grid .sc-summary-segment-enterprise { /* chartColor(0) — violet */
+  color: #9198F0;
+}
+.sc-summary-grid .sc-summary-segment-enterprise .sc-summary-segment-dot {
+  background: #9198F0;
+}
+
+.sc-summary-grid .sc-summary-segment-total {
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.sc-summary-grid .sc-summary-range {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.sc-summary-grid .sc-summary-money {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.sc-summary-grid .sc-summary-orders {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.sc-summary-grid .sc-summary-bar-cell {
+  display: inline-flex;
+  min-width: 100%;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sc-summary-grid .sc-summary-bar-track {
+  display: block;
+  height: 16px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--muted);
+}
+
+.sc-summary-grid .sc-summary-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+/* Bar fills match segment dot colours */
+.sc-summary-grid .sc-summary-bar-fill-low        { background: #7DBFCE; }
+.sc-summary-grid .sc-summary-bar-fill-medium     { background: #6DDFA0; }
+.sc-summary-grid .sc-summary-bar-fill-high       { background: #F7A85E; }
+.sc-summary-grid .sc-summary-bar-fill-enterprise { background: #9198F0; }
+
+.sc-summary-grid .sc-summary-bar-label {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.sc-summary-grid .sc-summary-total-percent {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.sc-summary-grid .sc-summary-yoy-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sc-summary-grid .sc-summary-yoy-positive {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.sc-summary-grid .sc-summary-yoy-negative {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+/* ── Top Deals Grid ───────────────────────────────────────────────────── */
+
+.td-deals-grid .hcg-container {
+  --hcg-border-width: 0;
+  --hcg-padding: 0;
+  --hcg-header-vertical-padding: 12px;
+  --hcg-header-horizontal-padding: 16px;
+  --hcg-vertical-padding: 14px;
+  --hcg-horizontal-padding: 16px;
+  --hcg-font-size: 14px;
+  --hcg-header-font-size: 11px;
+  --hcg-header-font-weight: 700;
+  --hcg-row-border-color: var(--border);
+  --hcg-header-row-border-color: var(--border);
+  --hcg-row-even-background: transparent;
+  --hcg-row-hover-background: color-mix(in srgb, var(--primary) 4%, transparent);
+  --hcg-header-color: var(--muted-foreground);
+  --hcg-color: var(--foreground);
+  --hcg-background: transparent;
+}
+
+.td-deals-grid .hcg-table th {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--muted);
+}
+
+.td-deals-grid .hcg-table th,
+.td-deals-grid .hcg-table td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.td-deals-grid .td-cell {
+  color: var(--foreground);
+}
+
+.td-deals-grid .td-rank {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--muted-foreground);
+  opacity: 0.45;
+}
+
+.td-deals-grid .td-company {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.td-deals-grid .td-company-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--foreground);
+}
+
+.td-deals-grid .td-company-owner {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.td-deals-grid .td-amount {
+  font-weight: 800;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+
+.td-deals-grid .td-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.td-deals-grid .td-stage-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.td-deals-grid .td-stage-won {
+  color: #10b981;
+}
+
+.td-deals-grid .td-stage-won .td-stage-dot {
+  background: #10b981;
+}
+
+.td-deals-grid .td-stage-negotiation {
+  color: #f59e0b;
+}
+
+.td-deals-grid .td-stage-negotiation .td-stage-dot {
+  background: #f59e0b;
+}
+
+.td-deals-grid .td-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.td-deals-grid .td-type-new {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.td-deals-grid .td-type-renewal {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.td-deals-grid .td-type-upgrade {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+}
+
+.td-deals-grid .td-type-downgrade {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.td-deals-grid .td-licence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid;
+}
+
+.td-deals-grid .td-licence-enterprise {
+  border-color: rgba(249, 115, 22, 0.25);
+  background: rgba(249, 115, 22, 0.08);
+  color: #f97316;
+}
+
+.td-deals-grid .td-licence-professional {
+  border-color: rgba(99, 102, 241, 0.25);
+  background: rgba(99, 102, 241, 0.08);
+  color: #6366f1;
+}
+
+.td-deals-grid .td-licence-standard {
+  border-color: rgba(100, 116, 139, 0.25);
+  background: rgba(100, 116, 139, 0.08);
+  color: #64748b;
+}
+
+.td-deals-grid .td-licence-starter {
+  border-color: rgba(20, 184, 166, 0.25);
+  background: rgba(20, 184, 166, 0.08);
+  color: #14b8a6;
+}

@@ -1,0 +1,20 @@
+{
+  "name": "backend-compass-v2",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:frontend",
+    "build": "npm run build:frontend",
+    "lint": "npm run lint:frontend",
+    "test": "npm run test:frontend",
+    "dev:frontend": "npm --prefix apps/frontend run dev",
+    "build:frontend": "npm --prefix apps/frontend run build",
+    "lint:frontend": "npm --prefix apps/frontend run lint",
+    "test:frontend": "npm --prefix apps/frontend run test",
+    "test:backend": "npm --prefix apps/backend run test",
+    "build:backend": "npm --prefix apps/backend run build"
+  }
+}

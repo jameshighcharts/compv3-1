@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@backend": ["./src/index.ts"],
+      "@backend/*": ["./src/*"],
+      "@contracts": ["../../packages/contracts/src/index.ts"],
+      "@contracts/*": ["../../packages/contracts/src/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "../../packages/contracts/src/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "../../packages/contracts/src/**/*.test.ts",
+    "node_modules",
+    "dist"
+  ]
+}
