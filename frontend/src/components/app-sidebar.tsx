@@ -35,7 +35,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 const navGeneral = [
   {
@@ -196,18 +196,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
+              asChild
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src="/avatars/user.png" alt="ausrobdev" />
-                <AvatarFallback className="rounded-lg">AR</AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">ausrobdev</span>
-                <span className="truncate text-xs">rob@shadcnblocks.com</span>
-              </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <Link href="/signin">
+                <Avatar className="h-8 w-8 rounded-lg">
+                  <AvatarFallback className="rounded-lg">S</AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">Slack Auth</span>
+                  <span className="truncate text-xs">Connect or disconnect</span>
+                </div>
+                <ChevronsUpDown className="ml-auto size-4" />
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
