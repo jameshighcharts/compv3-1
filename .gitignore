@@ -10,10 +10,12 @@ node_modules/
 
 # testing
 coverage/
+test-results/
 
 # build outputs
 .next/
 out/
+output/
 build/
 dist/
 

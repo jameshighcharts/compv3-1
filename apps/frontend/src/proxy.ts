@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 
 const PUBLIC_PATHS = new Set(["/signin"])
+const LOCAL_DEV_HOSTS = new Set(["127.0.0.1", "localhost", "::1"])
 
 const isPublicPath = (pathname: string): boolean =>
   PUBLIC_PATHS.has(pathname) || pathname.startsWith("/api/auth")
@@ -11,8 +12,14 @@ const isApiPath = (pathname: string): boolean => pathname.startsWith("/api/")
 
 export default auth((request) => {
   const { nextUrl } = request
-  const { pathname, search } = nextUrl
+  const { hostname, pathname, search } = nextUrl
   const isAuthenticated = Boolean(request.auth)
+  const isLocalDevBypass =
+    process.env.NODE_ENV !== "production" && LOCAL_DEV_HOSTS.has(hostname)
+
+  if (isLocalDevBypass) {
+    return NextResponse.next()
+  }
 
   if (isPublicPath(pathname)) {
     if (isAuthenticated && pathname === "/signin") {

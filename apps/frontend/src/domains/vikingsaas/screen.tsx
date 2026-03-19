@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { IconDownload } from "@tabler/icons-react";
+import { IconDownload, IconInfoCircle } from "@tabler/icons-react";
 
 import { useScorecardArr } from "@/lib/sf/use-scorecard-arr";
 import { Button } from "@/shared/ui/button";
@@ -15,14 +15,17 @@ import {
 } from "@/shared/ui/select";
 
 import { HCARRHoneycomb } from "./widgets/honeycomb";
+import { HcArrInfoSheet } from "./widgets/info-sheet";
+import { KpiTilesSection } from "./widgets/kpi-tiles";
+import { CompetitivePositionSection } from "./widgets/competitive-position";
 import { DetailPanel } from "./widgets/detail-panel";
 import { HEX_TO_PANEL } from "./data/vikingsaas.data";
 
 // ── Legend items ──────────────────────────────────────────────────────────────
 const LEGEND = [
-  { color: "#1a2e2a", label: "Growth & Profitability" },
-  { color: "#4a7c59", label: "CAC & Sales Efficiency" },
-  { color: "#f5f0d0", label: "Coverage Model & Sales Process", dark: true },
+  { color: "#1a2e2a", label: "ARR Growth" },
+  { color: "#4a7c59", label: "Retention & Revenue Quality" },
+  { color: "#f5f0d0", label: "Concentration & Pricing", dark: true },
 ];
 
 function formatCompactCurrency(value: number, currencyCode: string): string {
@@ -44,9 +47,11 @@ function formatPlainPct(value: number): string {
 
 export function HCARRView() {
   const arrState = useScorecardArr();
+  const [infoOpen, setInfoOpen] = React.useState(false);
   const [selectedHex, setSelectedHex] = React.useState<number | null>(null);
   const data = arrState.data;
   const currencyCode = data?.currencyCode ?? "USD";
+  const rollingTwelveMonthArr = data?.bridges.totalArr.closingArr ?? 0;
 
   const handleHexClick = React.useCallback((id: number) => {
     // Toggle: click the same hex again to close the panel
@@ -73,6 +78,7 @@ export function HCARRView() {
       2: formatPct(data.trailingTwelveMonths.totalArrGrowthPct),
       3: formatPct(data.trailingTwelveMonths.organicArrGrowthPct),
       4: formatPct(data.trailingTwelveMonths.newSalesArrGrowthPct),
+      10: formatCompactCurrency(rollingTwelveMonthArr, currencyCode),
       5: formatPlainPct(data.trailingTwelveMonths.recurringRevenuePct),
       6: formatPlainPct(data.trailingTwelveMonths.arrChurnPct),
       7: formatPlainPct(data.trailingTwelveMonths.renewalRatePct),
@@ -82,7 +88,7 @@ export function HCARRView() {
       23: formatCompactCurrency(data.currentSnapshot.arrPerCustomer, currencyCode),
       24: formatCompactCurrency(data.trailingTwelveMonths.averageSalesPrice, currencyCode),
     };
-  }, [currencyCode, data]);
+  }, [currencyCode, data, rollingTwelveMonthArr]);
   const highlights = React.useMemo(() => {
     if (!data) {
       return [
@@ -137,13 +143,22 @@ export function HCARRView() {
             <IconDownload className="mr-2 size-4" aria-hidden="true" />
             Export
           </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label="Open ARR appendix"
+            onClick={() => setInfoOpen(true)}
+          >
+            <IconInfoCircle className="size-4" aria-hidden="true" />
+          </Button>
           <div className="rounded-full border border-[#4a7c59]/20 bg-[#4a7c59]/8 px-3 py-1 text-xs font-medium text-muted-foreground">
-            {arrState.loading && data ? "Refreshing live data..." : "Live ARR + placeholder finance metrics"}
+            {arrState.loading && data ? "Refreshing live data..." : "13 live Woo ARR metrics"}
           </div>
         </div>
       </div>
 
       <div className="mt-5 flex flex-col gap-5">
+        <HcArrInfoSheet open={infoOpen} onOpenChange={setInfoOpen} data={data} />
 
         {/* ── Honeycomb card ──────────────────────────────────────────────────── */}
         <Card>
@@ -152,7 +167,7 @@ export function HCARRView() {
               <div>
                 <CardTitle>HC ARR KPI Dashboard — Honeycomb</CardTitle>
                 <CardDescription>
-                  27 KPIs across three clusters · click a highlighted cell to drill into detail
+                  13 live ARR KPIs across three clusters · click a cell to drill into detail
                 </CardDescription>
               </div>
               {/* Colour legend */}
@@ -170,13 +185,45 @@ export function HCARRView() {
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto pb-4">
-            <div className="min-w-[760px]">
+            <div className="min-w-[820px]">
               <HCARRHoneycomb
                 selectedId={selectedHex}
                 onHexClick={handleHexClick}
                 metricValues={metricValues}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* ── KPI tiles — alternate visualisation ──────────────────────────── */}
+        <Card className="gap-0 py-0">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">KPI Breakdown</CardTitle>
+            <CardDescription>
+              Same 13 live metrics, laid out for quick scanning — click any tile to drill in
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pb-5">
+            <KpiTilesSection
+              metricValues={metricValues}
+              onKpiClick={handleHexClick}
+            />
+          </CardContent>
+        </Card>
+
+        {/* ── Competitive position — benchmark gauges ─────────────────────── */}
+        <Card className="gap-0 py-0">
+          <CardHeader className="pb-0">
+            <CardTitle className="text-base">Competitive Position</CardTitle>
+            <CardDescription>
+              Where we sit vs peer median and quartile range — bullet gauges show rank at a glance
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-2 pb-4 pt-2">
+            <CompetitivePositionSection
+              metricValues={metricValues}
+              onKpiClick={handleHexClick}
+            />
           </CardContent>
         </Card>
 
@@ -208,7 +255,7 @@ export function HCARRView() {
 
         <Card className="gap-0 py-0">
           <CardContent className="px-5 py-4 text-xs text-muted-foreground">
-            Supported honeycomb cells now use live Woo subscription, order, and order-line logic. Finance, HR, and CAC-driven cells remain placeholder values until those source systems are wired in.
+            The honeycomb now shows only metrics backed by live Woo subscription, order, and order-line logic. Finance, HR, and CAC-efficiency metrics stay out of the hex layout until those source systems are wired in.
           </CardContent>
         </Card>
 
@@ -217,7 +264,7 @@ export function HCARRView() {
           <CardHeader className="pb-2 pt-5">
             <CardTitle className="text-base">KPI Reference</CardTitle>
             <CardDescription>
-              27 HC ARR Framework metrics
+              13 live honeycomb metrics plus the remaining HC ARR framework reference
             </CardDescription>
           </CardHeader>
           <CardContent className="pb-5">
@@ -247,6 +294,7 @@ export function HCARRView() {
 const GLOSSARY = [
   // Growth & Profitability
   { name: "Total ARR",                cat: "Growth",   type: "$" },
+  { name: "Rolling 12M ARR",          cat: "Growth",   type: "$" },
   { name: "Total ARR Growth",         cat: "Growth",   type: "%" },
   { name: "Organic ARR Growth Rate",  cat: "Growth",   type: "%" },
   { name: "New Sales ARR Growth",     cat: "Growth",   type: "%" },

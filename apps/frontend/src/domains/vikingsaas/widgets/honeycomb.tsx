@@ -6,15 +6,29 @@ import { useTheme } from "next-themes";
 import { HEX_TO_PANEL } from "../data/vikingsaas.data";
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
-const R           = 44;
-const COL_SPACING = R * 1.5;
+const R           = 58;
+// For flat-top hexagons, exact tessellation column spacing is 1.5 * R
+const TIGHT_COL   = R * 1.5;            // within-group (no gap)
+const GROUP_GAP   = 28;                  // gap between the three colour groups
 const ROW_SPACING = R * Math.sqrt(3);
 const ODD_OFFSET  = ROW_SPACING / 2;
 
-const OFFSET_X = 58;
-const OFFSET_Y = 82;
-const SVG_W    = 10 * COL_SPACING + OFFSET_X + R + 10;
-const SVG_H    = 5 * ROW_SPACING + OFFSET_Y + R + 5;
+const OFFSET_X = 76;
+const OFFSET_Y = 120;
+
+// Column x-positions: cols 0-2 (group 1), 3-4 (group 2), 5-6 (group 3)
+const COL_X = [
+  0,                                         // col 0
+  TIGHT_COL,                                 // col 1 (tight to col 0)
+  TIGHT_COL * 2,                             // col 2 (tight to col 1)
+  TIGHT_COL * 3 + GROUP_GAP,                 // col 3 (gap after group 1)
+  TIGHT_COL * 4 + GROUP_GAP,                 // col 4 (tight to col 3)
+  TIGHT_COL * 5 + GROUP_GAP * 2,             // col 5 (gap after group 2)
+  TIGHT_COL * 6 + GROUP_GAP * 2,             // col 6 (tight to col 5)
+];
+
+const SVG_W    = COL_X[6] + OFFSET_X + R + 16;
+const SVG_H    = 2 * ROW_SPACING + OFFSET_Y + R + 16;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Group = 1 | 2 | 3;
@@ -55,59 +69,45 @@ const GROUP_ACCENT: Record<Group, string> = {
 
 // ── Hex data ──────────────────────────────────────────────────────────────────
 const HEXES: HexDef[] = [
-  // ── Group 1 — Growth & Profitability ─────────────────────────────────────
-  { id: 1,  lines: ["Total ARR"],              value: "$4.2M",  group: 1, col: 0, row: 2 },
-  { id: 2,  lines: ["Total ARR", "Growth"],    value: "+16%",   group: 1, col: 1, row: 1 },
-  { id: 3,  lines: ["Organic ARR", "Growth"],  value: "+13%",   group: 1, col: 1, row: 2 },
-  { id: 4,  lines: ["New Sales", "ARR Grwth"], value: "+18%",   group: 1, col: 1, row: 3 },
-  { id: 5,  lines: ["% Recurring", "Revenue"], value: "87%",    group: 1, col: 2, row: 0 },
-  { id: 6,  lines: ["Churn"],                  value: "8.5%",   group: 1, col: 2, row: 1 },
-  { id: 7,  lines: ["Renewal Rate"],           value: "91%",    group: 1, col: 2, row: 2 },
-  { id: 8,  lines: ["Rule of 40"],             value: "34",     group: 1, col: 2, row: 3 },
-  { id: 9,  lines: ["SaaS Gross", "Margin"],   value: "74%",    group: 1, col: 3, row: 0 },
-  { id: 10, lines: ["Growth", "Endurance"],    value: "0.81",   group: 1, col: 3, row: 1 },
-  { id: 11, lines: ["EBITDA"],                 value: "12%",    group: 1, col: 3, row: 2 },
-  { id: 12, lines: ["EBITDA-Capex"],           value: "$380K",  group: 1, col: 3, row: 3 },
-  { id: 13, lines: ["Operating", "Cash Flow"], value: "$510K",  group: 1, col: 3, row: 4 },
+  // ── Group 1 — ARR Growth ──────────────────────────────────────────────────
+  { id: 2,  lines: ["Total ARR", "Growth"],    value: "+16%",   group: 1, col: 0, row: 0 },
+  { id: 1,  lines: ["Total ARR"],              value: "$4.2M",  group: 1, col: 0, row: 1 },
+  { id: 3,  lines: ["Organic ARR", "Growth"],  value: "+13%",   group: 1, col: 1, row: 0 },
+  { id: 4,  lines: ["New Sales", "ARR Grwth"], value: "+18%",   group: 1, col: 1, row: 1 },
+  { id: 10, lines: ["Rolling 12M", "ARR"],     value: "$4.6M",  group: 1, col: 2, row: 0 },
 
-  // ── Group 2 — CAC & Sales Efficiency ──────────────────────────────────────
-  { id: 14, lines: ["Net Rev.", "Retention"],  value: "108%",   group: 2, col: 4, row: 0 },
-  { id: 15, lines: ["CAC Payback"],            value: "16 mo",  group: 2, col: 4, row: 1 },
-  { id: 16, lines: ["LTV / CAC"],              value: "4.2×",   group: 2, col: 4, row: 2 },
-  { id: 17, lines: ["Magic", "Number"],        value: "0.82",   group: 2, col: 5, row: 0 },
-  { id: 18, lines: ["Yield", "per Rep"],       value: "$420K",  group: 2, col: 5, row: 1 },
-  { id: 19, lines: ["S&M % ARR"],              value: "28%",    group: 2, col: 6, row: 0 },
-  { id: 20, lines: ["R&D % ARR"],              value: "32%",    group: 2, col: 6, row: 1 },
+  // ── Group 2 — Retention & Revenue Quality ─────────────────────────────────
+  { id: 5,  lines: ["% Recurring", "Revenue"], value: "87%",    group: 2, col: 3, row: 0 },
+  { id: 7,  lines: ["Renewal Rate"],           value: "91%",    group: 2, col: 3, row: 1 },
+  { id: 14, lines: ["Net Revenue", "Retention"], value: "108%", group: 2, col: 4, row: 0 },
+  { id: 6,  lines: ["Churn"],                  value: "8.5%",   group: 2, col: 4, row: 1 },
 
-  // ── Group 3 — Coverage Model & Sales Process ──────────────────────────────
-  { id: 21, lines: ["Customer", "Conc."],      value: "12%",    group: 3, col: 7, row: 0 },
-  { id: 22, lines: ["Industry", "Conc."],      value: "34%",    group: 3, col: 7, row: 1 },
-  { id: 23, lines: ["ARR per", "Customer"],    value: "$42K",   group: 3, col: 7, row: 2 },
-  { id: 24, lines: ["Avg Sales", "Price"],     value: "$38K",   group: 3, col: 8, row: 0 },
-  { id: 25, lines: ["ARR / FTEs"],             value: "$280K",  group: 3, col: 8, row: 1 },
-  { id: 26, lines: ["Emp. Cost", "/ FTE"],     value: "$95K",   group: 3, col: 9, row: 0 },
-  { id: 27, lines: ["Employee", "Cost Total"], value: "$4.1M",  group: 3, col: 9, row: 1 },
+  // ── Group 3 — Concentration & Pricing ─────────────────────────────────────
+  { id: 21, lines: ["Customer", "Conc."],      value: "12%",    group: 3, col: 5, row: 0 },
+  { id: 23, lines: ["ARR per", "Customer"],    value: "$42K",   group: 3, col: 5, row: 1 },
+  { id: 22, lines: ["Industry", "Conc."],      value: "34%",    group: 3, col: 6, row: 0 },
+  { id: 24, lines: ["Avg Sales", "Price"],     value: "$38K",   group: 3, col: 6, row: 1 },
 ];
 
 // ── Category labels ───────────────────────────────────────────────────────────
 interface CatLabel { lines: string[]; x: number; yTop: number; group: Group }
 const CAT_LABELS: CatLabel[] = [
   {
-    lines: ["Growth &", "Profitability"],
-    x: OFFSET_X + 1.5 * COL_SPACING,
-    yTop: OFFSET_Y - R - 14,
+    lines: ["ARR Growth"],
+    x: OFFSET_X + (COL_X[0] + COL_X[2]) / 2,
+    yTop: OFFSET_Y - R - 16,
     group: 1,
   },
   {
-    lines: ["CAC &", "Sales Efficiency"],
-    x: OFFSET_X + 5.0 * COL_SPACING,
-    yTop: OFFSET_Y - R - 14,
+    lines: ["Retention &", "Revenue Quality"],
+    x: OFFSET_X + (COL_X[3] + COL_X[4]) / 2,
+    yTop: OFFSET_Y - R - 28,
     group: 2,
   },
   {
-    lines: ["Coverage Model &", "Sales Process"],
-    x: OFFSET_X + 8.0 * COL_SPACING,
-    yTop: OFFSET_Y - R - 14,
+    lines: ["Concentration", "& Pricing"],
+    x: OFFSET_X + (COL_X[5] + COL_X[6]) / 2,
+    yTop: OFFSET_Y - R - 28,
     group: 3,
   },
 ];
@@ -115,7 +115,7 @@ const CAT_LABELS: CatLabel[] = [
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function hexCenter(col: number, row: number) {
   return {
-    x: OFFSET_X + col * COL_SPACING,
+    x: OFFSET_X + COL_X[col],
     y: OFFSET_Y + row * ROW_SPACING + (col % 2) * ODD_OFFSET,
   };
 }
@@ -139,9 +139,6 @@ export function HCARRHoneycomb({ selectedId, onHexClick, metricValues }: HCARRHo
   const isDark = resolvedTheme === "dark";
   const palette = isDark ? GROUP_FILLS.dark : GROUP_FILLS.light;
 
-  // Stroke between adjacent hexes — barely visible divider
-  const hexStroke = isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.09)";
-
   // Category label colours
   const catLabelAccent: Record<Group, string> = {
     1: isDark ? "#6dba88" : "#1c3328",
@@ -160,25 +157,17 @@ export function HCARRHoneycomb({ selectedId, onHexClick, metricValues }: HCARRHo
       {/* ── Category headers ──────────────────────────────────────────────── */}
       {CAT_LABELS.map((cl) => (
         <g key={cl.group}>
-          {/* Accent dot */}
-          <circle
-            cx={cl.x}
-            cy={cl.yTop - 8}
-            r={3}
-            fill={catLabelAccent[cl.group]}
-            opacity={0.85}
-          />
           {cl.lines.map((line, i) => (
             <text
               key={i}
               x={cl.x}
-              y={cl.yTop + i * 15}
+              y={cl.yTop + i * 18}
               textAnchor="middle"
               fill={catLabelAccent[cl.group]}
-              fontSize={12}
-              fontWeight="700"
+              fontSize={14}
+              fontWeight="800"
               fontFamily="inherit"
-              letterSpacing="0.3"
+              letterSpacing="0.5"
             >
               {line}
             </text>
@@ -190,16 +179,16 @@ export function HCARRHoneycomb({ selectedId, onHexClick, metricValues }: HCARRHo
       {HEXES.map((hex) => {
         const { x, y }   = hexCenter(hex.col, hex.row);
         const style       = palette[hex.group];
-        const pts         = hexPoints(x, y, R - 1);
+        const pts         = hexPoints(x, y, R - 3);
         const isClickable = !!HEX_TO_PANEL[hex.id];
         const isSelected  = hex.id === selectedId;
         const accent      = GROUP_ACCENT[hex.group];
 
         // Text y positions — two-line label sits higher, single-line centred
         const twoLine   = hex.lines.length === 2;
-        const labelY1   = twoLine ? y - 14 : y - 9;
-        const labelY2   = twoLine ? y - 4  : y - 9;
-        const valueY    = twoLine ? y + 13 : y + 12;
+        const labelY1   = twoLine ? y - 18 : y - 12;
+        const labelY2   = twoLine ? y - 6  : y - 12;
+        const valueY    = twoLine ? y + 18 : y + 16;
 
         return (
           <g
@@ -226,8 +215,8 @@ export function HCARRHoneycomb({ selectedId, onHexClick, metricValues }: HCARRHo
             <polygon
               points={pts}
               fill={style.bg}
-              stroke={isSelected ? accent : hexStroke}
-              strokeWidth={isSelected ? 1.5 : 1}
+              stroke={isSelected ? accent : style.bg}
+              strokeWidth={isSelected ? 2 : 0.5}
             />
 
             {/* Hover highlight overlay — pure SVG opacity trick */}
@@ -250,7 +239,7 @@ export function HCARRHoneycomb({ selectedId, onHexClick, metricValues }: HCARRHo
                   x={x} y={labelY1}
                   textAnchor="middle"
                   fill={style.sub}
-                  fontSize={9}
+                  fontSize={11}
                   fontFamily="inherit"
                   letterSpacing="0.2"
                 >
@@ -260,7 +249,7 @@ export function HCARRHoneycomb({ selectedId, onHexClick, metricValues }: HCARRHo
                   x={x} y={labelY2}
                   textAnchor="middle"
                   fill={style.sub}
-                  fontSize={9}
+                  fontSize={11}
                   fontFamily="inherit"
                   letterSpacing="0.2"
                 >
@@ -272,7 +261,7 @@ export function HCARRHoneycomb({ selectedId, onHexClick, metricValues }: HCARRHo
                 x={x} y={labelY1}
                 textAnchor="middle"
                 fill={style.sub}
-                fontSize={11}
+                fontSize={12}
                 fontFamily="inherit"
                 letterSpacing="0.2"
               >
@@ -286,10 +275,10 @@ export function HCARRHoneycomb({ selectedId, onHexClick, metricValues }: HCARRHo
               y={valueY}
               textAnchor="middle"
               fill={style.text}
-              fontSize={15}
-              fontWeight="700"
+              fontSize={20}
+              fontWeight="800"
               fontFamily="inherit"
-              letterSpacing="-0.3"
+              letterSpacing="-0.5"
             >
               {metricValues?.[hex.id] ?? hex.value}
             </text>

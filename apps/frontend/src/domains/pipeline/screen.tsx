@@ -2,36 +2,60 @@
 
 import * as React from "react";
 
-import Highcharts from "@/shared/charts/highcharts-init";
+import type { SfOpportunityPipelineDeal, SfOpportunityPipelineResponse } from "@contracts/sales";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
+import Highcharts from "@/shared/charts/highcharts-init";
 import { DashboardHighchart, createBaseChartOptions } from "@/shared/charts/highcharts";
 import { HighchartsGridPro } from "@/shared/charts/highcharts-grid-pro";
+import { Button } from "@/shared/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
 import { Slider } from "@/shared/ui/slider";
 
+import { useSalesforcePipeline } from "@/lib/sf/use-salesforce-pipeline";
+
 import {
-  allBubblePoints,
-  allDeals,
-  BubblePoint,
-  Deal,
-  COMPANY_INFO,
-  FILTER_RANGES,
-  FUNNEL_BUBBLE_MAX_SIZE,
-  FUNNEL_BUBBLE_MIN_SIZE,
-  FUNNEL_STAGE_BUBBLE_SIZES,
-  FUNNEL_BUBBLE_Z_MAX,
-  FUNNEL_BUBBLE_Z_MIN,
+  buildCloseQuarterOptions,
+  buildDealFilterBounds,
+  buildFunnelPacking,
+  clampRangeFilters,
+  createDefaultRangeFilters,
+  formatCompactCurrency,
   FUNNEL_STAGE_COLORS,
-  MAX_DEAL_SIZE,
-  pipelineDeals,
-  salesPipelineKpis,
-  wonDeals,
+  type BubblePoint,
+  type FunnelPackingLayout,
+  type RangeFilterKey,
+  type RangeFilterState,
+  stageBadgeClass,
+  STAGE_NAMES,
+  type StageName,
+  type StatusFilter,
+  sortRange,
+  valueInRange,
 } from "./data/pipeline.data";
 import { ArrKpiCard } from "../sales/widgets/cards";
 
-// ─── Grid options ─────────────────────────────────────────────────────────────
+type BubbleSeries = {
+  name: StageName;
+  color: string;
+  data: BubblePoint[];
+};
 
-function buildWonGridOptions() {
+type RangeFilterConfig = {
+  key: RangeFilterKey;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  format: (value: [number, number]) => string;
+};
+
+function funnelBoundAtX(dataX: number): number {
+  const t = (dataX - -0.5) / (3.5 - -0.5);
+  return 4.5 - 3.0 * t;
+}
+
+function buildWonGridOptions(deals: readonly SfOpportunityPipelineDeal[]) {
   return {
     accessibility: { enabled: false },
     pagination: { enabled: false },
@@ -54,52 +78,59 @@ function buildWonGridOptions() {
       {
         id: "company",
         header: { format: "Company" },
-        width: "34%",
+        width: "30%",
         cells: {
           className: "sp-grid-cell",
           formatter: function () {
-            const v = String((this as { value?: unknown }).value ?? "");
-            return `<span style="font-weight:600">${v}</span>`;
+            const value = String((this as { value?: unknown }).value ?? "");
+            return `<span style="font-weight:600">${value}</span>`;
           },
         },
       },
       {
-        id: "contact",
-        header: { format: "Contact" },
-        width: "28%",
+        id: "owner",
+        header: { format: "Owner" },
+        width: "18%",
         cells: { className: "sp-grid-cell sp-meta-cell" },
       },
       {
         id: "dealSize",
         header: { format: "Deal Size" },
-        width: "20%",
+        width: "16%",
         cells: {
           className: "sp-grid-cell sp-amount-cell",
           formatter: function () {
-            const n = Number((this as { value?: unknown }).value ?? 0);
-            return `<span class="sp-stage-won-text">$${Math.round(n / 1000)}K</span>`;
+            const value = Number((this as { value?: unknown }).value ?? 0);
+            return `<span class="sp-stage-won-text">${formatCompactCurrency(value)}</span>`;
           },
         },
       },
       {
+        id: "timeOpen",
+        header: { format: "Time Open" },
+        width: "16%",
+        cells: { className: "sp-grid-cell sp-meta-cell" },
+      },
+      {
         id: "closeDate",
         header: { format: "Closed" },
-        width: "18%",
+        width: "20%",
         cells: { className: "sp-grid-cell sp-meta-cell" },
       },
     ],
     dataTable: {
       columns: {
-        company:   wonDeals.map((d) => d.company),
-        contact:   wonDeals.map((d) => d.contact),
-        dealSize:  wonDeals.map((d) => d.dealSize),
-        closeDate: wonDeals.map((d) => d.expectedClose),
+        company: deals.map((deal) => deal.company),
+        owner: deals.map((deal) => deal.ownerName),
+        dealSize: deals.map((deal) => deal.amount),
+        timeOpen: deals.map((deal) => `${deal.timeOpen}d`),
+        closeDate: deals.map((deal) => deal.closeDate ?? "Unknown"),
       },
     },
   };
 }
 
-function buildPipelineGridOptions() {
+function buildPipelineGridOptions(deals: readonly SfOpportunityPipelineDeal[]) {
   return {
     accessibility: { enabled: false },
     pagination: { enabled: true },
@@ -122,156 +153,98 @@ function buildPipelineGridOptions() {
       {
         id: "company",
         header: { format: "Company" },
-        width: "22%",
-        cells: {
-          className: "sp-grid-cell",
-          formatter: function () {
-            const v = String((this as { value?: unknown }).value ?? "");
-            return `<span style="font-weight:600">${v}</span>`;
-          },
-        },
-      },
-      {
-        id: "stage",
-        header: { format: "Stage" },
         width: "18%",
         cells: {
           className: "sp-grid-cell",
           formatter: function () {
-            const s = String((this as { value?: unknown }).value ?? "");
-            const cls =
-              s === "Scoping"   ? "sp-stage-scoping"   :
-              s === "Proposal"  ? "sp-stage-proposal"  :
-              s === "Committed" ? "sp-stage-committed" : "";
-            return `<span class="sp-stage-badge ${cls}">${s}</span>`;
+            const value = String((this as { value?: unknown }).value ?? "");
+            return `<span style="font-weight:600">${value}</span>`;
+          },
+        },
+      },
+      {
+        id: "owner",
+        header: { format: "Owner" },
+        width: "14%",
+        cells: { className: "sp-grid-cell sp-meta-cell" },
+      },
+      {
+        id: "stage",
+        header: { format: "Stage" },
+        width: "14%",
+        cells: {
+          className: "sp-grid-cell",
+          formatter: function () {
+            const stage = String((this as { value?: unknown }).value ?? "");
+            return `<span class="sp-stage-badge ${stageBadgeClass(stage as StageName)}">${stage}</span>`;
           },
         },
       },
       {
         id: "dealSize",
         header: { format: "Deal Size" },
-        width: "16%",
+        width: "12%",
         cells: {
           className: "sp-grid-cell sp-amount-cell",
           formatter: function () {
-            const n = Number((this as { value?: unknown }).value ?? 0);
-            const large = n > 200000 ? " sp-deal-large" : "";
-            return `<span class="${large.trim()}">$${Math.round(n / 1000)}K</span>`;
+            const value = Number((this as { value?: unknown }).value ?? 0);
+            const large = value > 200_000 ? " sp-deal-large" : "";
+            return `<span class="${large.trim()}">${formatCompactCurrency(value)}</span>`;
           },
         },
       },
       {
         id: "probability",
         header: { format: "Prob." },
-        width: "12%",
+        width: "10%",
         cells: {
           className: "sp-grid-cell",
           formatter: function () {
-            const p = Number((this as { value?: unknown }).value ?? 0);
-            const cls = p >= 70 ? "sp-prob-high" : p >= 40 ? "sp-prob-medium" : "sp-prob-low";
-            return `<span class="${cls}">${p}%</span>`;
+            const value = Number((this as { value?: unknown }).value ?? 0);
+            const style =
+              value >= 70 ? "sp-prob-high" : value >= 40 ? "sp-prob-medium" : "sp-prob-low";
+            return `<span class="${style}">${value}%</span>`;
           },
         },
       },
       {
-        id: "contact",
-        header: { format: "Contact" },
-        width: "18%",
+        id: "daysOpen",
+        header: { format: "Days Open" },
+        width: "10%",
+        cells: { className: "sp-grid-cell sp-meta-cell" },
+      },
+      {
+        id: "timeOpen",
+        header: { format: "Time Open" },
+        width: "10%",
         cells: { className: "sp-grid-cell sp-meta-cell" },
       },
       {
         id: "expectedClose",
         header: { format: "Exp. Close" },
-        width: "14%",
+        width: "12%",
         cells: { className: "sp-grid-cell sp-meta-cell" },
       },
     ],
     dataTable: {
       columns: {
-        company:       pipelineDeals.map((d) => d.company),
-        stage:         pipelineDeals.map((d) => d.stage),
-        dealSize:      pipelineDeals.map((d) => d.dealSize),
-        probability:   pipelineDeals.map((d) => d.probability),
-        contact:       pipelineDeals.map((d) => d.contact),
-        expectedClose: pipelineDeals.map((d) => d.expectedClose),
+        company: deals.map((deal) => deal.company),
+        owner: deals.map((deal) => deal.ownerName),
+        stage: deals.map((deal) => deal.stageBucket),
+        dealSize: deals.map((deal) => deal.amount),
+        probability: deals.map((deal) => deal.probability),
+        daysOpen: deals.map((deal) => `${deal.daysOpen}d`),
+        timeOpen: deals.map((deal) => `${deal.timeOpen}d`),
+        expectedClose: deals.map((deal) => deal.expectedCloseDate ?? deal.closeDate ?? "Unknown"),
       },
     },
   };
 }
 
-// ─── Funnel bubble chart ──────────────────────────────────────────────────────
-
-const STAGE_NAMES = ["Scoping", "Proposal", "Committed", "Won"] as const;
-
-function formatCompactCurrency(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
-  return `$${Math.round(n)}`;
-}
-
-// Linear interpolation of the funnel y-boundary at a given x.
-// Left edge (x=-0.5): y_bound=4.5 · Right edge (x=3.5): y_bound=1.5
-function funnelBoundAtX(dataX: number): number {
-  const t = (dataX - -0.5) / (3.5 - -0.5);
-  return 4.5 - 3.0 * t;
-}
-
-// ─── Filter dimensions ────────────────────────────────────────────────────────
-
-type FilterDimKey = "dealSize" | "companyArr" | "employees" | "age";
-
-const FILTER_DIMS: Array<{
-  key: FilterDimKey;
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-  format: (v: number) => string;
-  extract: (name: string, z: number) => number;
-}> = [
-  {
-    key:     "dealSize",
-    label:   "Deal Size",
-    min:     0,
-    max:     MAX_DEAL_SIZE,
-    step:    10000,
-    format:  (v) => v === 0 ? "All" : `≥ $${Math.round(v / 1000)}K`,
-    extract: (_name, z) => z,
-  },
-  {
-    key:     "companyArr",
-    label:   "Co. ARR",
-    min:     0,
-    max:     FILTER_RANGES.maxAnnualRevenue,
-    step:    5000,
-    format:  (v) => v === 0 ? "All" : `≥ $${(v / 1000).toFixed(0)}M`,
-    extract: (name) => COMPANY_INFO[name]?.annualRevenue ?? 0,
-  },
-  {
-    key:     "employees",
-    label:   "Headcount",
-    min:     0,
-    max:     FILTER_RANGES.maxEmployeeCount,
-    step:    50,
-    format:  (v) => v === 0 ? "All" : `≥ ${v.toLocaleString()}`,
-    extract: (name) => COMPANY_INFO[name]?.employeeCount ?? 0,
-  },
-  {
-    key:     "age",
-    label:   "Age",
-    min:     0,
-    max:     FILTER_RANGES.maxYearsInBiz,
-    step:    1,
-    format:  (v) => v === 0 ? "All" : `≥ ${v} yr${v !== 1 ? "s" : ""}`,
-    extract: (name) => COMPANY_INFO[name] ? 2026 - COMPANY_INFO[name].foundedYear : 0,
-  },
-];
-
-type SelectedPoint = { name: string; stage: string; probability: number; z: number };
-
 function buildFunnelChartOptions(
-  series: Array<{ name: string; color: string; data: BubblePoint[] }>,
-  onPointClick: (pt: SelectedPoint) => void,
+  series: readonly BubbleSeries[],
+  layout: FunnelPackingLayout,
+  onPointClick: (opportunityId: string) => void,
 ): Highcharts.Options {
   return createBaseChartOptions({
     chart: {
@@ -280,34 +253,54 @@ function buildFunnelChartOptions(
       spacing: [24, 16, 16, 16],
       events: {
         render: function () {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const chart = this as any;
+          const chart = this as Highcharts.Chart & { _funnelOverlay?: Highcharts.SVGElement[] };
 
-          // Remove previously drawn overlay elements
           if (Array.isArray(chart._funnelOverlay)) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (chart._funnelOverlay as any[]).forEach((el) => { try { el.destroy(); } catch { /* ignore */ } });
+            chart._funnelOverlay.forEach((element) => {
+              try {
+                element.destroy();
+              } catch {
+                // Ignore stale overlay teardown errors.
+              }
+            });
           }
+
           chart._funnelOverlay = [];
 
-          const xa = chart.xAxis[0];
-          const ya = chart.yAxis[0];
-          if (!xa || !ya) return;
+          const xAxis = chart.xAxis[0];
+          const yAxis = chart.yAxis[0];
 
-          const px = (d: number) => xa.toPixels(d, false) as number;
-          const py = (d: number) => ya.toPixels(d, false) as number;
+          if (!xAxis || !yAxis) {
+            return;
+          }
 
-          // ── Trapezoid fill ───────────────────────────────────────────────
-          const lx  = px(-0.5);
-          const rx  = px(3.5);
-          const lyT = py(4.5);
-          const lyB = py(-4.5);
-          const ryT = py(1.5);
-          const ryB = py(-1.5);
+          const px = (value: number) => xAxis.toPixels(value, false) as number;
+          const py = (value: number) => yAxis.toPixels(value, false) as number;
+
+          const leftX = px(-0.5);
+          const rightX = px(3.5);
+          const leftTop = py(4.5);
+          const leftBottom = py(-4.5);
+          const rightTop = py(1.5);
+          const rightBottom = py(-1.5);
 
           chart._funnelOverlay.push(
             chart.renderer
-              .path(["M", lx, lyT, "L", rx, ryT, "L", rx, ryB, "L", lx, lyB, "Z"])
+              .path([
+                "M",
+                leftX,
+                leftTop,
+                "L",
+                rightX,
+                rightTop,
+                "L",
+                rightX,
+                rightBottom,
+                "L",
+                leftX,
+                leftBottom,
+                "Z",
+              ] as unknown as Highcharts.SVGPathArray)
               .attr({
                 fill: "rgba(128,135,232,0.05)",
                 stroke: "rgba(128,135,232,0.22)",
@@ -317,13 +310,18 @@ function buildFunnelChartOptions(
               .add(),
           );
 
-          // ── Dashed vertical dividers at x = 0.5, 1.5, 2.5 ──────────────
-          [0.5, 1.5, 2.5].forEach((dx) => {
-            const divX   = px(dx);
-            const yBound = funnelBoundAtX(dx);
-            chart._funnelOverlay.push(
+          [0.5, 1.5, 2.5].forEach((dividerX) => {
+            const yBound = funnelBoundAtX(dividerX);
+            chart._funnelOverlay?.push(
               chart.renderer
-                .path(["M", divX, py(yBound), "L", divX, py(-yBound)])
+                .path([
+                  "M",
+                  px(dividerX),
+                  py(yBound),
+                  "L",
+                  px(dividerX),
+                  py(-yBound),
+                ] as unknown as Highcharts.SVGPathArray)
                 .attr({
                   stroke: "rgba(100,116,139,0.35)",
                   "stroke-width": 1,
@@ -334,14 +332,11 @@ function buildFunnelChartOptions(
             );
           });
 
-          // ── Stage labels above each section ─────────────────────────────
-          STAGE_NAMES.forEach((name, i) => {
-            const cx     = px(i);
-            const yBound = funnelBoundAtX(i);
-            const labelY = py(yBound + 0.45);
-            chart._funnelOverlay.push(
+          STAGE_NAMES.forEach((name, index) => {
+            const yBound = funnelBoundAtX(index);
+            chart._funnelOverlay?.push(
               chart.renderer
-                .text(name, cx, labelY)
+                .text(name, px(index), py(yBound + 0.45))
                 .attr({ align: "center", zIndex: 5 })
                 .css({
                   color: "var(--muted-foreground)",
@@ -364,8 +359,8 @@ function buildFunnelChartOptions(
       gridLineWidth: 0,
       labels: {
         formatter: function () {
-          const v = Math.round(this.value as number);
-          return STAGE_NAMES[v] ?? "";
+          const index = Math.round(this.value as number);
+          return STAGE_NAMES[index] ?? "";
         },
         style: { color: "transparent" },
       },
@@ -384,10 +379,10 @@ function buildFunnelChartOptions(
     },
     plotOptions: {
       bubble: {
-        minSize: FUNNEL_BUBBLE_MIN_SIZE,
-        maxSize: FUNNEL_BUBBLE_MAX_SIZE,
-        zMin: FUNNEL_BUBBLE_Z_MIN,
-        zMax: FUNNEL_BUBBLE_Z_MAX,
+        minSize: layout.bubbleMinSize,
+        maxSize: layout.bubbleMaxSize,
+        zMin: layout.zMin,
+        zMax: layout.zMax,
         opacity: 0.82,
         marker: {
           lineWidth: 1,
@@ -400,14 +395,13 @@ function buildFunnelChartOptions(
         point: {
           events: {
             click: function () {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const p = this as any;
-              onPointClick({
-                name: p.name as string,
-                stage: p.stage as string,
-                probability: p.probability as number,
-                z: p.z as number,
-              });
+              const point = this as Highcharts.Point & { opportunityId?: string };
+              const opportunityId =
+                typeof point.opportunityId === "string" ? point.opportunityId : "";
+
+              if (opportunityId) {
+                onPointClick(opportunityId);
+              }
             },
           },
         },
@@ -416,341 +410,691 @@ function buildFunnelChartOptions(
     tooltip: {
       useHTML: true,
       formatter: function () {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = this as any;
-        const sizeK = `$${Math.round((p.z as number) / 1000)}K`;
+        const context = this as unknown as {
+          point: Highcharts.Point & {
+            z?: number;
+            name?: string;
+            stage?: string;
+            stageName?: string;
+            probability?: number;
+          };
+        };
+        const point = context.point;
+
         return `
-          <div style="padding:4px 2px;min-width:140px">
-            <div style="font-weight:700;margin-bottom:4px">${p.name as string}</div>
-            <div style="font-size:13px">${sizeK}</div>
+          <div style="padding:4px 2px;min-width:160px">
+            <div style="font-weight:700;margin-bottom:4px">${point.name ?? ""}</div>
+            <div style="font-size:13px">${formatCompactCurrency(Number(point.z ?? 0))}</div>
             <div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">
-              ${p.stage as string} · ${p.probability as number}%
+              ${point.stageName ?? point.stage ?? ""} · ${Number(point.probability ?? 0)}%
             </div>
           </div>`;
       },
     },
-    series: series.map((s) => {
-      const stage = s.name as Deal["stage"];
-      const size = FUNNEL_STAGE_BUBBLE_SIZES[stage];
+    series: series.map((entry) => {
+      const size = layout.stageBubbleSizes[entry.name];
+
       return {
         type: "bubble" as const,
-        name: s.name,
-        color: s.color,
-        minSize: size?.minSize ?? FUNNEL_BUBBLE_MIN_SIZE,
-        maxSize: size?.maxSize ?? FUNNEL_BUBBLE_MAX_SIZE,
-        zMin: size?.zMin ?? FUNNEL_BUBBLE_Z_MIN,
-        zMax: size?.zMax ?? FUNNEL_BUBBLE_Z_MAX,
-        data: s.data.map((pt) => ({
-          x: pt.x,
-          y: pt.y,
-          z: pt.z,
-          name: pt.name,
-          stage: pt.stage,
-          probability: pt.probability,
+        name: entry.name,
+        color: entry.color,
+        minSize: size.minSize,
+        maxSize: size.maxSize,
+        zMin: size.zMin,
+        zMax: size.zMax,
+        data: entry.data.map((point) => ({
+          x: point.x,
+          y: point.y,
+          z: point.z,
+          name: point.name,
+          stage: point.stage,
+          stageName: point.stageName,
+          probability: point.probability,
+          opportunityId: point.id,
         })),
       };
     }),
   });
 }
 
-// ─── View ─────────────────────────────────────────────────────────────────────
-
-export function SalesPipelineView() {
-  const [filterDim, setFilterDim]         = React.useState<FilterDimKey>("dealSize");
-  const [filterValues, setFilterValues]   = React.useState<Record<FilterDimKey, number>>({ dealSize: 0, companyArr: 0, employees: 0, age: 0 });
-  const [selectedPoint, setSelectedPoint] = React.useState<SelectedPoint | null>(null);
-
-  const wonGridOptions      = React.useMemo(() => buildWonGridOptions(),      []);
-  const pipelineGridOptions = React.useMemo(() => buildPipelineGridOptions(), []);
-
-  const activeDim = React.useMemo(() => FILTER_DIMS.find((d) => d.key === filterDim)!, [filterDim]);
-  const minFilterValue = filterValues[filterDim];
-
-  const filteredBubblePoints = React.useMemo(
+export function SalesPipelineView({
+  initialData = null,
+}: {
+  initialData?: SfOpportunityPipelineResponse | null;
+}) {
+  const pipelineState = useSalesforcePipeline({ initialData });
+  const isInitialLoading = pipelineState.loading && pipelineState.data === null;
+  const allDeals = React.useMemo(
+    () => pipelineState.data?.deals ?? [],
+    [pipelineState.data],
+  );
+  const allVisibleDeals = React.useMemo(
+    () => allDeals.filter((deal) => !deal.isClosed || deal.isWon),
+    [allDeals],
+  );
+  const rangeBounds = React.useMemo(() => buildDealFilterBounds(allDeals), [allDeals]);
+  const ownerOptions = React.useMemo(
     () =>
-      minFilterValue > 0
-        ? allBubblePoints.filter((p) => activeDim.extract(p.name, p.z) >= minFilterValue)
-        : allBubblePoints,
-    [activeDim, minFilterValue],
+      Array.from(new Set(allDeals.map((deal) => deal.ownerName).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right),
+      ),
+    [allDeals],
+  );
+  const closeQuarterOptions = React.useMemo(
+    () => buildCloseQuarterOptions(allDeals),
+    [allDeals],
+  );
+  const rangeFilterConfigs = React.useMemo<RangeFilterConfig[]>(
+    () => [
+      {
+        key: "dealSize",
+        label: "Deal Size",
+        min: 0,
+        max: rangeBounds.maxDealSize,
+        step: 10_000,
+        format: ([min, max]) => `${formatCompactCurrency(min)} - ${formatCompactCurrency(max)}`,
+      },
+      {
+        key: "probability",
+        label: "Probability",
+        min: 0,
+        max: rangeBounds.maxProbability,
+        step: 5,
+        format: ([min, max]) => `${min}% - ${max}%`,
+      },
+      {
+        key: "daysOpen",
+        label: "Days Open",
+        min: 0,
+        max: rangeBounds.maxDaysOpen,
+        step: 5,
+        format: ([min, max]) => `${min}d - ${max}d`,
+      },
+      {
+        key: "timeOpen",
+        label: "Time Open",
+        min: 0,
+        max: rangeBounds.maxTimeOpen,
+        step: 5,
+        format: ([min, max]) => `${min}d - ${max}d`,
+      },
+      {
+        key: "lastActivityDays",
+        label: "Activity Age",
+        min: 0,
+        max: rangeBounds.maxLastActivityDays,
+        step: 5,
+        format: ([min, max]) => `${min}d - ${max}d`,
+      },
+    ],
+    [rangeBounds],
+  );
+
+  const [selectedStages, setSelectedStages] = React.useState<StageName[]>([...STAGE_NAMES]);
+  const [ownerFilter, setOwnerFilter] = React.useState<string>("all");
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
+  const [quarterFilter, setQuarterFilter] = React.useState<string>("all");
+  const [rangeFilters, setRangeFilters] = React.useState<RangeFilterState>(() =>
+    createDefaultRangeFilters(rangeBounds),
+  );
+  const [selectedOpportunityId, setSelectedOpportunityId] = React.useState<string | null>(null);
+  const initializedRangesRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (allDeals.length === 0) {
+      initializedRangesRef.current = false;
+      setRangeFilters(createDefaultRangeFilters(rangeBounds));
+      return;
+    }
+
+    setRangeFilters((current) => {
+      if (!initializedRangesRef.current) {
+        initializedRangesRef.current = true;
+        return createDefaultRangeFilters(rangeBounds);
+      }
+
+      return clampRangeFilters(current, rangeBounds);
+    });
+  }, [allDeals.length, rangeBounds]);
+
+  const allStagesSelected = selectedStages.length === STAGE_NAMES.length;
+
+  const toggleStage = React.useCallback((stage: StageName) => {
+    setSelectedStages((current) => {
+      if (current.includes(stage)) {
+        return current.length === 1 ? current : current.filter((value) => value !== stage);
+      }
+
+      return [...current, stage].sort(
+        (left, right) => STAGE_NAMES.indexOf(left) - STAGE_NAMES.indexOf(right),
+      ) as StageName[];
+    });
+  }, []);
+
+  const resetFilters = React.useCallback(() => {
+    setSelectedStages([...STAGE_NAMES]);
+    setOwnerFilter("all");
+    setStatusFilter("all");
+    setQuarterFilter("all");
+    setRangeFilters(createDefaultRangeFilters(rangeBounds));
+  }, [rangeBounds]);
+
+  const scopedDeals = React.useMemo(
+    () =>
+      allDeals.filter((deal) => {
+        const activityAge = deal.lastActivityDays ?? rangeBounds.maxLastActivityDays;
+
+        if (!selectedStages.includes(deal.stageBucket as StageName)) return false;
+        if (ownerFilter !== "all" && deal.ownerName !== ownerFilter) return false;
+        if (quarterFilter !== "all" && deal.closeQuarter !== quarterFilter) return false;
+        if (!valueInRange(deal.amount, rangeFilters.dealSize)) return false;
+        if (!valueInRange(deal.probability, rangeFilters.probability)) return false;
+        if (!valueInRange(deal.daysOpen, rangeFilters.daysOpen)) return false;
+        if (!valueInRange(deal.timeOpen, rangeFilters.timeOpen)) return false;
+        if (!valueInRange(activityAge, rangeFilters.lastActivityDays)) return false;
+        return true;
+      }),
+    [allDeals, ownerFilter, quarterFilter, rangeBounds.maxLastActivityDays, rangeFilters, selectedStages],
+  );
+
+  const scopedClosedDeals = React.useMemo(
+    () => scopedDeals.filter((deal) => deal.isClosed),
+    [scopedDeals],
+  );
+  const scopedWonDeals = React.useMemo(
+    () => scopedClosedDeals.filter((deal) => deal.isWon),
+    [scopedClosedDeals],
+  );
+  const scopedLostDeals = React.useMemo(
+    () => scopedClosedDeals.filter((deal) => !deal.isWon),
+    [scopedClosedDeals],
+  );
+  const scopedVisibleDeals = React.useMemo(
+    () => scopedDeals.filter((deal) => !deal.isClosed || deal.isWon),
+    [scopedDeals],
   );
 
   const filteredDeals = React.useMemo(
     () =>
-      minFilterValue > 0
-        ? allDeals.filter((d) => activeDim.extract(d.company, d.dealSize) >= minFilterValue)
-        : allDeals,
-    [activeDim, minFilterValue],
+      scopedVisibleDeals.filter((deal) => {
+        if (statusFilter === "open") return !deal.isClosed;
+        if (statusFilter === "won") return deal.isWon;
+        return true;
+      }),
+    [scopedVisibleDeals, statusFilter],
   );
 
-  const filteredFunnelSeries = React.useMemo(() => {
-    return STAGE_NAMES.map((stage) => ({
-      name: stage,
-      color: FUNNEL_STAGE_COLORS[stage],
-      data: filteredBubblePoints.filter((p) => p.stage === stage),
-    }));
-  }, [filteredBubblePoints]);
+  const filteredDealIds = React.useMemo(
+    () => new Set(filteredDeals.map((deal) => deal.id)),
+    [filteredDeals],
+  );
 
-  const visibleCount = filteredBubblePoints.length;
+  React.useEffect(() => {
+    if (selectedOpportunityId && !filteredDealIds.has(selectedOpportunityId)) {
+      setSelectedOpportunityId(null);
+    }
+  }, [filteredDealIds, selectedOpportunityId]);
+
+  const filteredWonDeals = React.useMemo(
+    () =>
+      filteredDeals
+        .filter((deal) => deal.isWon)
+        .slice()
+        .sort((left, right) => (right.closeDate ?? "").localeCompare(left.closeDate ?? "")),
+    [filteredDeals],
+  );
+
+  const filteredPipelineDeals = React.useMemo(
+    () =>
+      filteredDeals
+        .filter((deal) => !deal.isClosed)
+        .slice()
+        .sort((left, right) => {
+          const leftDate = left.expectedCloseDate ?? left.closeDate ?? "9999-12-31";
+          const rightDate = right.expectedCloseDate ?? right.closeDate ?? "9999-12-31";
+
+          return leftDate.localeCompare(rightDate) || right.amount - left.amount;
+        }),
+    [filteredDeals],
+  );
+
+  const funnelPacking = React.useMemo(
+    // Keep the funnel layout stable across filter changes so we only solve the expensive packer
+    // when the underlying Salesforce payload changes.
+    () => buildFunnelPacking(allVisibleDeals),
+    [allVisibleDeals],
+  );
 
   const stageFilterKpis = React.useMemo(() => {
-    const fullStageStats = STAGE_NAMES.reduce<Record<(typeof STAGE_NAMES)[number], { count: number; value: number }>>(
-      (acc, stage) => {
-        const stageDeals = allDeals.filter((d) => d.stage === stage);
-        acc[stage] = {
-          count: stageDeals.length,
-          value: stageDeals.reduce((sum, d) => sum + d.dealSize, 0),
-        };
-        return acc;
-      },
-      {
-        Scoping: { count: 0, value: 0 },
-        Proposal: { count: 0, value: 0 },
-        Committed: { count: 0, value: 0 },
-        Won: { count: 0, value: 0 },
-      },
-    );
+    const baselineVisibleDeals = allVisibleDeals;
 
     return STAGE_NAMES.map((stage) => {
-      const stageDeals = filteredDeals.filter((d) => d.stage === stage);
-      const filteredValue = stageDeals.reduce((sum, d) => sum + d.dealSize, 0);
-      const baselineCount = fullStageStats[stage].count;
-      const deltaPct = baselineCount > 0 ? ((stageDeals.length - baselineCount) / baselineCount) * 100 : 0;
+      const stageDeals = filteredDeals.filter((deal) => deal.stageBucket === stage);
+      const baselineCount = baselineVisibleDeals.filter((deal) => deal.stageBucket === stage).length;
+      const value = stageDeals.reduce((sum, deal) => sum + deal.amount, 0);
+      const deltaPct =
+        baselineCount > 0 ? ((stageDeals.length - baselineCount) / baselineCount) * 100 : 0;
 
       return {
         stage,
         dealsAdded: stageDeals.length,
-        valueAdded: formatCompactCurrency(filteredValue),
+        valueAdded: formatCompactCurrency(value),
         deltaPct,
       };
     });
-  }, [filteredDeals]);
+  }, [allVisibleDeals, filteredDeals]);
 
-  const handleBubbleClick = React.useCallback((pt: SelectedPoint) => setSelectedPoint(pt), []);
+  const filteredFunnelSeries = React.useMemo<BubbleSeries[]>(
+    () =>
+      STAGE_NAMES.map((stage) => ({
+        name: stage,
+        color: FUNNEL_STAGE_COLORS[stage],
+        data: funnelPacking.points.filter(
+          (point) => point.stage === stage && filteredDealIds.has(point.id),
+        ),
+      })),
+    [filteredDealIds, funnelPacking.points],
+  );
 
   const funnelChartOptions = React.useMemo(
-    () => buildFunnelChartOptions(filteredFunnelSeries, handleBubbleClick),
-    [filteredFunnelSeries, handleBubbleClick],
+    () => buildFunnelChartOptions(filteredFunnelSeries, funnelPacking, setSelectedOpportunityId),
+    [filteredFunnelSeries, funnelPacking],
+  );
+
+  const kpis = React.useMemo(() => {
+    const pipelineValue = filteredPipelineDeals.reduce((sum, deal) => sum + deal.amount, 0);
+    const wonValue = filteredWonDeals.reduce((sum, deal) => sum + deal.amount, 0);
+    const avgDaysOpen =
+      filteredPipelineDeals.length > 0
+        ? Math.round(
+            filteredPipelineDeals.reduce((sum, deal) => sum + deal.daysOpen, 0) /
+              filteredPipelineDeals.length,
+          )
+        : 0;
+    const avgTimeOpen =
+      filteredPipelineDeals.length > 0
+        ? Math.round(
+            filteredPipelineDeals.reduce((sum, deal) => sum + deal.timeOpen, 0) /
+              filteredPipelineDeals.length,
+          )
+        : 0;
+    const staleOpenDeals = filteredPipelineDeals.filter((deal) => (deal.lastActivityDays ?? 999) > 14).length;
+    const winRate =
+      scopedClosedDeals.length > 0
+        ? Math.round((scopedWonDeals.length / scopedClosedDeals.length) * 100)
+        : 0;
+
+    return [
+      {
+        title: "Total Pipeline Value",
+        value: formatCompactCurrency(pipelineValue),
+        subtitle: `${filteredPipelineDeals.length} active opportunities`,
+        trend: `${formatCompactCurrency(wonValue)} won in current view`,
+        positive: true,
+      },
+      {
+        title: "Deals in Pipe",
+        value: String(filteredPipelineDeals.length),
+        subtitle: `${filteredWonDeals.length} won visible`,
+        trend: `${scopedLostDeals.length} closed-lost in manager scope`,
+        positive: true,
+      },
+      {
+        title: "Avg Days Open",
+        value: `${avgDaysOpen}d`,
+        subtitle: `${avgTimeOpen}d avg time open`,
+        trend: `${staleOpenDeals} open deals stale for 14+d`,
+        positive: staleOpenDeals <= Math.max(2, Math.round(filteredPipelineDeals.length * 0.25)),
+      },
+      {
+        title: "Win Rate",
+        value: `${winRate}%`,
+        subtitle: `${scopedWonDeals.length} won of ${scopedClosedDeals.length} closed`,
+        trend: `${scopedLostDeals.length} lost in current scope`,
+        positive: winRate >= 30,
+      },
+    ];
+  }, [filteredPipelineDeals, filteredWonDeals, scopedClosedDeals, scopedLostDeals, scopedWonDeals]);
+
+  const wonGridOptions = React.useMemo(
+    () => buildWonGridOptions(filteredWonDeals),
+    [filteredWonDeals],
+  );
+
+  const pipelineGridOptions = React.useMemo(
+    () => buildPipelineGridOptions(filteredPipelineDeals),
+    [filteredPipelineDeals],
+  );
+
+  const selectedDeal = React.useMemo(
+    () => filteredDeals.find((deal) => deal.id === selectedOpportunityId) ?? null,
+    [filteredDeals, selectedOpportunityId],
   );
 
   return (
     <>
-    <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Sales Pipeline</h1>
-        <p className="text-muted-foreground">Track deals from scoping to close.</p>
-      </div>
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Sales Pipeline</h1>
+          <p className="text-muted-foreground">
+            Live Opportunity funnel powered through the same Salesforce API layer as daily scorecards.
+          </p>
+        </div>
 
-      {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {salesPipelineKpis.map((kpi) => (
-          <ArrKpiCard
-            key={kpi.title}
-            title={kpi.title}
-            value={kpi.value}
-            subtitle={kpi.subtitle}
-            trend={kpi.trend}
-            positive={kpi.positive}
-          />
-        ))}
-      </div>
+        {pipelineState.error ? (
+          <Card className="border-red-200 bg-red-50/60">
+            <CardContent className="p-4 text-sm text-red-700">
+              {pipelineState.error}
+            </CardContent>
+          </Card>
+        ) : null}
 
-      {/* Funnel-bubble chart */}
-      <Card className="gap-0 py-0">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 p-5 pb-3">
-          <div>
-            <CardTitle className="text-base">Pipeline Funnel</CardTitle>
-            <CardDescription>Deal size and volume across pipeline stages</CardDescription>
-          </div>
-          <div className="flex flex-col gap-2 min-w-[260px]">
-            {/* Dimension pills */}
-            <div className="flex items-center gap-1.5 flex-wrap justify-end">
-              {FILTER_DIMS.map((dim) => (
-                <button
-                  key={dim.key}
-                  onClick={() => setFilterDim(dim.key)}
-                  className={`text-xs px-2.5 py-0.5 rounded-full font-medium border transition-colors ${
-                    filterDim === dim.key
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-transparent text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-                  }`}
-                >
-                  {dim.label}
-                </button>
+        {isInitialLoading ? (
+          <Card>
+            <CardContent className="flex min-h-[220px] items-center justify-center p-6 text-center">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-foreground">Loading live Opportunity pipeline</p>
+                <p className="text-sm text-muted-foreground">
+                  Pulling the current funnel from Salesforce. The chart will render once the live payload lands.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {!isInitialLoading ? (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {kpis.map((kpi) => (
+                <ArrKpiCard
+                  key={kpi.title}
+                  title={kpi.title}
+                  value={kpi.value}
+                  subtitle={kpi.subtitle}
+                  trend={kpi.trend}
+                  positive={kpi.positive}
+                />
               ))}
             </div>
-            {/* Slider */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">{activeDim.label}</span>
-                <span className="text-xs font-semibold tabular-nums">
-                  {activeDim.format(filterValues[filterDim])}
-                  <span className="ml-1.5 text-muted-foreground font-normal">
-                    · {visibleCount} deal{visibleCount !== 1 ? "s" : ""}
-                  </span>
-                </span>
+
+            <Card className="gap-0 py-0">
+              <CardHeader className="p-5 pb-3">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <div>
+                      <CardTitle className="text-base">Manager Filters</CardTitle>
+                      <CardDescription>
+                        {filteredDeals.length} visible of {scopedVisibleDeals.length} open or won opportunities
+                        {` · ${scopedLostDeals.length} closed-lost in scope`}
+                        {pipelineState.loading ? " · Refreshing live data" : ""}
+                      </CardDescription>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                        <SelectTrigger className="w-[170px] text-sm">
+                          <SelectValue placeholder="Owner" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All owners</SelectItem>
+                          {ownerOptions.map((owner) => (
+                            <SelectItem key={owner} value={owner}>
+                              {owner}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+                        <SelectTrigger className="w-[140px] text-sm">
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Open + won</SelectItem>
+                          <SelectItem value="open">Open only</SelectItem>
+                          <SelectItem value="won">Won only</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={quarterFilter} onValueChange={setQuarterFilter}>
+                        <SelectTrigger className="w-[150px] text-sm">
+                          <SelectValue placeholder="Quarter" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All quarters</SelectItem>
+                          {closeQuarterOptions.map((quarter) => (
+                            <SelectItem key={quarter} value={quarter}>
+                              {quarter}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Button variant="outline" size="sm" onClick={resetFilters}>
+                        Reset filters
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStages([...STAGE_NAMES])}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        allStagesSelected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                      }`}
+                    >
+                      All stages
+                    </button>
+                    {STAGE_NAMES.map((stage) => {
+                      const active = selectedStages.includes(stage);
+
+                      return (
+                        <button
+                          key={stage}
+                          type="button"
+                          onClick={() => toggleStage(stage)}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                            active
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                          }`}
+                        >
+                          {stage}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="grid gap-4 p-5 pt-0 md:grid-cols-2 xl:grid-cols-5">
+                {rangeFilterConfigs.map((filter) => (
+                  <div key={filter.key} className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        {filter.label}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-foreground">
+                        {filter.format(rangeFilters[filter.key])}
+                      </span>
+                    </div>
+                    <Slider
+                      min={filter.min}
+                      max={filter.max}
+                      step={filter.step}
+                      value={rangeFilters[filter.key]}
+                      onValueChange={(values) =>
+                        setRangeFilters((current) => ({
+                          ...current,
+                          [filter.key]: sortRange(values),
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="gap-0 py-0">
+              <CardHeader className="p-5 pb-3">
+                <div className="flex flex-col gap-2">
+                  <CardTitle className="text-base">Pipeline Funnel</CardTitle>
+                  <CardDescription>
+                    Stage distribution, counts, and value for the filtered Opportunity set
+                  </CardDescription>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-4 pt-0">
+                <DashboardHighchart options={funnelChartOptions} className="h-[460px] w-full" />
+              </CardContent>
+
+              <div className="grid grid-cols-2 border-t border-border sm:grid-cols-4">
+                {stageFilterKpis.map((stageSummary, index) => (
+                  <div
+                    key={stageSummary.stage}
+                    className={`flex flex-col gap-2 p-5 ${index < stageFilterKpis.length - 1 ? "border-r border-border" : ""}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-2 w-2 rounded-full"
+                        style={{ backgroundColor: FUNNEL_STAGE_COLORS[stageSummary.stage] }}
+                      />
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        {stageSummary.stage}
+                      </span>
+                    </div>
+
+                    <div className="flex items-end gap-2">
+                      <span className="text-3xl font-bold tabular-nums leading-none">
+                        {stageSummary.dealsAdded}
+                      </span>
+                      <span className="mb-0.5 text-sm text-muted-foreground">deals</span>
+                    </div>
+
+                    <div className="text-base font-semibold tabular-nums text-foreground">
+                      {stageSummary.valueAdded}
+                    </div>
+
+                    <p
+                      className={`text-xs font-medium ${
+                        stageSummary.deltaPct > 0
+                          ? "text-emerald-500"
+                          : stageSummary.deltaPct < 0
+                            ? "text-red-500"
+                            : "text-muted-foreground"
+                      }`}
+                    >
+                      {`${stageSummary.deltaPct > 0 ? "+" : ""}${Math.round(stageSummary.deltaPct)}%`} vs all visible opportunities
+                    </p>
+                  </div>
+                ))}
               </div>
-              <Slider
-                min={activeDim.min}
-                max={activeDim.max}
-                step={activeDim.step}
-                value={[filterValues[filterDim]]}
-                onValueChange={([v]) => setFilterValues((prev) => ({ ...prev, [filterDim]: v }))}
-                className="w-full"
-              />
+            </Card>
+
+            <div className="grid grid-cols-5 gap-4">
+              <Card className="col-span-5 gap-0 py-0 xl:col-span-2">
+                <CardHeader className="p-5 pb-2">
+                  <CardTitle className="text-base">Latest Sales</CardTitle>
+                  <CardDescription>Closed-won opportunities in the current manager scope</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0 pb-2">
+                  <HighchartsGridPro options={wonGridOptions} className="sp-pipeline-grid h-[220px]" />
+                </CardContent>
+              </Card>
+
+              <Card className="col-span-5 gap-0 py-0 xl:col-span-3">
+                <CardHeader className="p-5 pb-2">
+                  <CardTitle className="text-base">In the Pipe</CardTitle>
+                  <CardDescription>Active opportunities filtered for sales-manager review</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0 pb-2">
+                  <HighchartsGridPro options={pipelineGridOptions} className="sp-pipeline-grid h-[350px]" />
+                </CardContent>
+              </Card>
             </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-4 pt-0">
-          <DashboardHighchart
-            options={funnelChartOptions}
-            className="h-[460px] w-full"
-          />
-        </CardContent>
-
-        {/* ── Per-stage KPIs (respect slider filter) ─────────────────────── */}
-        <div className="grid grid-cols-2 border-t border-border sm:grid-cols-4">
-          {stageFilterKpis.map((s, i) => (
-            <div
-              key={s.stage}
-              className={`flex flex-col gap-2 p-5 ${i < stageFilterKpis.length - 1 ? "border-r border-border" : ""}`}
-            >
-              {/* Stage label with colour dot */}
-              <div className="flex items-center gap-2">
-                <span
-                  className="inline-block h-2 w-2 rounded-full"
-                  style={{ backgroundColor: FUNNEL_STAGE_COLORS[s.stage] }}
-                />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  {s.stage}
-                </span>
-              </div>
-
-              {/* Primary: deal count */}
-              <div className="flex items-end gap-2">
-                <span className="text-3xl font-bold tabular-nums leading-none">{s.dealsAdded}</span>
-                <span className="mb-0.5 text-sm text-muted-foreground">deals</span>
-              </div>
-
-              {/* Secondary: total value */}
-              <div className="text-base font-semibold tabular-nums text-foreground">
-                {s.valueAdded}
-              </div>
-
-              {/* Delta vs full unfiltered stage count */}
-              <p
-                className={`text-xs font-medium ${
-                  s.deltaPct > 0 ? "text-emerald-500" : s.deltaPct < 0 ? "text-red-500" : "text-muted-foreground"
-                }`}
-              >
-                {`${s.deltaPct > 0 ? "+" : ""}${Math.round(s.deltaPct)}%`} vs all deals
-              </p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Grids */}
-      <div className="grid gap-4 grid-cols-5">
-        {/* Won deals — col-span-2 */}
-        <Card className="col-span-5 xl:col-span-2 gap-0 py-0">
-          <CardHeader className="p-5 pb-2">
-            <CardTitle className="text-base">Latest Sales</CardTitle>
-            <CardDescription>Recently closed deals</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0 pb-2">
-            <HighchartsGridPro
-              options={wonGridOptions}
-              className="sp-pipeline-grid h-[220px]"
-            />
-          </CardContent>
-        </Card>
-
-        {/* Pipeline deals — col-span-3 */}
-        <Card className="col-span-5 xl:col-span-3 gap-0 py-0">
-          <CardHeader className="p-5 pb-2">
-            <CardTitle className="text-base">In the Pipe</CardTitle>
-            <CardDescription>Active opportunities by stage</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0 pb-2">
-            <HighchartsGridPro
-              options={pipelineGridOptions}
-              className="sp-pipeline-grid h-[350px]"
-            />
-          </CardContent>
-        </Card>
+          </>
+        ) : null}
       </div>
-    </div>
 
-    {/* ── Company detail popup ─────────────────────────────────────────────── */}
-    {selectedPoint && (() => {
-      const info = COMPANY_INFO[selectedPoint.name];
-      const deal = allDeals.find((d) => d.company === selectedPoint.name);
-      if (!info || !deal) return null;
-      const stageCls =
-        selectedPoint.stage === "Scoping"   ? "sp-stage-scoping"   :
-        selectedPoint.stage === "Proposal"  ? "sp-stage-proposal"  :
-        selectedPoint.stage === "Committed" ? "sp-stage-committed" : "sp-stage-won";
-
-      return (
+      {selectedDeal ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setSelectedPoint(null)}
+          onClick={() => setSelectedOpportunityId(null)}
         >
           <div
-            className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-[440px] mx-4 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+            className="mx-4 w-full max-w-[560px] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
           >
-            {/* Header */}
             <div className="flex items-start justify-between p-6 pb-4">
-              <div className="space-y-1.5">
-                <h3 className="text-xl font-bold tracking-tight leading-none">{selectedPoint.name}</h3>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-medium">
-                    {info.industry}
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold leading-none tracking-tight">{selectedDeal.company}</h3>
+                <p className="text-sm text-muted-foreground">{selectedDeal.dealName}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`sp-stage-badge ${stageBadgeClass(selectedDeal.stageBucket as StageName)} text-xs`}>
+                    {selectedDeal.stageBucket}
                   </span>
-                  <span className={`sp-stage-badge ${stageCls} text-xs`}>
-                    {selectedPoint.stage}
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                    {selectedDeal.ownerName}
+                  </span>
+                  <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                    {selectedDeal.closeQuarter}
                   </span>
                 </div>
               </div>
               <button
-                onClick={() => setSelectedPoint(null)}
-                className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-muted transition-colors ml-3 shrink-0"
+                onClick={() => setSelectedOpportunityId(null)}
+                className="ml-3 shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label="Close"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               </button>
             </div>
 
-            {/* Description */}
-            <p className="text-sm text-muted-foreground leading-relaxed px-6 pb-5">
-              {info.description}
-            </p>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-3 gap-px bg-border mx-6 mb-5 rounded-xl overflow-hidden">
+            <div className="mx-6 mb-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-border">
               {[
-                { label: "Deal Size",    value: `$${Math.round(selectedPoint.z / 1000)}K` },
-                { label: "Probability",  value: `${selectedPoint.probability}%` },
-                { label: "Employees",    value: info.employees },
-                { label: "Company ARR",  value: info.yearlyRevenue },
-                { label: "Contact",      value: deal.contact },
-                { label: "Exp. Close",   value: deal.expectedClose },
+                { label: "Opportunity ID", value: selectedDeal.id },
+                { label: "Deal Size", value: formatCompactCurrency(selectedDeal.amount) },
+                { label: "Probability", value: `${selectedDeal.probability}%` },
+                { label: "Owner", value: selectedDeal.ownerName },
+                { label: "Actual Stage", value: selectedDeal.stageName },
+                { label: "Funnel Bucket", value: selectedDeal.stageBucket },
+                { label: "Days Open", value: `${selectedDeal.daysOpen}d` },
+                { label: "Time Open", value: `${selectedDeal.timeOpen}d` },
+                { label: "Woo Order ID", value: selectedDeal.wooOrderId ?? "No linked Woo order" },
+                {
+                  label: selectedDeal.isWon ? "Closed" : "Expected Close",
+                  value:
+                    selectedDeal.expectedCloseDate ??
+                    selectedDeal.closeDate ??
+                    "Unknown",
+                },
+                { label: "Created", value: selectedDeal.createdDate },
+                {
+                  label: "Last Activity",
+                  value:
+                    selectedDeal.lastActivityDate ??
+                    "No logged activity",
+                },
+                { label: "Close Quarter", value: selectedDeal.closeQuarter },
+                {
+                  label: "Loss Reason",
+                  value: selectedDeal.lossReason ?? "Not lost",
+                },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-card px-3 py-3">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
+                  <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
                   <p className="text-sm font-semibold leading-tight">{value}</p>
                 </div>
               ))}
             </div>
           </div>
         </div>
-      );
-    })()}
+      ) : null}
     </>
   );
 }
