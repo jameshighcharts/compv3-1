@@ -31,6 +31,7 @@ For Slack sign-in with Auth.js, also set:
 - `AUTH_SECRET`
 - `AUTH_SLACK_ID`
 - `AUTH_SLACK_SECRET`
+- `AUTH_SLACK_TEAM_ID`
 
 Optional:
 
@@ -47,6 +48,11 @@ Register one of these redirect URLs in the Slack app configuration, depending on
 If the app is mounted below a path prefix, include the prefix before `/api/auth`. Example:
 
 - `https://www.highcharts.com/chat/gpt/api/auth/callback/slack`
+
+The app uses `AUTH_SLACK_TEAM_ID` to do two things:
+
+- hint Slack to open that workspace during sign-in
+- reject any callback that returns from a different Slack workspace
 
 ## Query Salesforce With SOQL (`sf` CLI)
 
