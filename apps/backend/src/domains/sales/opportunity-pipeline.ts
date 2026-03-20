@@ -1,5 +1,6 @@
 import {
   sfOpportunityPipelineResponseSchema,
+  type PipelineClosedRange,
   type PipelineStageBucket,
   type SfOpportunityPipelineResponse,
 } from "@contracts/sales";
@@ -15,6 +16,10 @@ type CacheEntry<T> = {
 type OpportunityPipelineServiceResult<T> = {
   payload: T;
   cacheHit: boolean;
+};
+
+type OpportunityPipelineOptions = {
+  closedRange?: PipelineClosedRange;
 };
 
 type OpportunityPipelineRecord = {
@@ -74,17 +79,14 @@ const OPTIONAL_PIPELINE_QUERY_FIELDS = [
 
 const CACHE_TTL_MS = Number(process.env.SF_PIPELINE_CACHE_TTL_MS ?? 5 * 60 * 1000);
 const CACHE_MAX_ENTRIES = 12;
-const RECENT_CLOSED_DAYS = Number(process.env.SF_PIPELINE_CLOSED_WINDOW_DAYS ?? 365);
+const DEFAULT_CLOSED_RANGE: PipelineClosedRange = "ytd";
 
 const opportunityPipelineCache = new Map<string, CacheEntry<SfOpportunityPipelineResponse>>();
 const opportunityPipelineInFlight = new Map<string, Promise<SfOpportunityPipelineResponse>>();
 const unsupportedOpportunityFields = new Set<string>();
 
-const addUtcDays = (value: Date, delta: number): Date => {
-  const next = new Date(value);
-  next.setUTCDate(next.getUTCDate() + delta);
-  return next;
-};
+const startOfUtcYear = (value: Date): Date =>
+  new Date(Date.UTC(value.getUTCFullYear(), 0, 1));
 
 const toNumber = (value: unknown): number => {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -230,9 +232,14 @@ const resolveStageBucket = (record: OpportunityPipelineRecord): PipelineStageBuc
 const buildOpportunityPipelineQuery = (
   now: Date,
   fields: readonly string[],
+  closedRange: PipelineClosedRange,
 ): string => {
   const asOfDate = formatDateOnlyUtc(now);
-  const recentClosedFrom = formatDateOnlyUtc(addUtcDays(now, -(RECENT_CLOSED_DAYS - 1)));
+  const ytdClosedFrom = formatDateOnlyUtc(startOfUtcYear(now));
+  const closedRangeClause =
+    closedRange === "all"
+      ? "(IsClosed = false OR IsClosed = true)"
+      : `(IsClosed = false OR (IsClosed = true AND CloseDate >= ${ytdClosedFrom} AND CloseDate <= ${asOfDate}))`;
 
   return [
     `SELECT ${fields.join(", ")}`,
@@ -240,7 +247,7 @@ const buildOpportunityPipelineQuery = (
     "WHERE IsDeleted = false",
     "AND Amount != null",
     "AND StageName != null",
-    `AND ((IsClosed = false) OR (IsClosed = true AND CloseDate >= ${recentClosedFrom} AND CloseDate <= ${asOfDate}))`,
+    `AND ${closedRangeClause}`,
     "ORDER BY IsClosed ASC, IsWon DESC, CloseDate DESC NULLS LAST, Amount DESC NULLS LAST",
   ].join(" ");
 };
@@ -356,7 +363,10 @@ const writeCache = <T>(
   }
 };
 
-const loadOpportunityPipelinePayload = async (now: Date): Promise<SfOpportunityPipelineResponse> => {
+const loadOpportunityPipelinePayload = async (
+  now: Date,
+  closedRange: PipelineClosedRange,
+): Promise<SfOpportunityPipelineResponse> => {
   const fields = [
     ...CORE_PIPELINE_QUERY_FIELDS,
     ...OPTIONAL_PIPELINE_QUERY_FIELDS.filter((field) => !unsupportedOpportunityFields.has(field)),
@@ -365,7 +375,7 @@ const loadOpportunityPipelinePayload = async (now: Date): Promise<SfOpportunityP
   while (true) {
     try {
       const rows = await querySalesforce<OpportunityPipelineRecord>(
-        buildOpportunityPipelineQuery(now, fields),
+        buildOpportunityPipelineQuery(now, fields, closedRange),
       );
 
       return buildPayload(rows, now);
@@ -394,8 +404,10 @@ const loadOpportunityPipelinePayload = async (now: Date): Promise<SfOpportunityP
 
 export const getOpportunityPipelinePayload = async (
   now: Date = new Date(),
+  options: OpportunityPipelineOptions = {},
 ): Promise<OpportunityPipelineServiceResult<SfOpportunityPipelineResponse>> => {
-  const cacheKey = `opportunity-pipeline:${formatDateOnlyUtc(now)}:${RECENT_CLOSED_DAYS}`;
+  const closedRange = options.closedRange ?? DEFAULT_CLOSED_RANGE;
+  const cacheKey = `opportunity-pipeline:${formatDateOnlyUtc(now)}:${closedRange}`;
   const cached = readCache(opportunityPipelineCache, cacheKey);
 
   if (cached) {
@@ -414,7 +426,7 @@ export const getOpportunityPipelinePayload = async (
     };
   }
 
-  const task = loadOpportunityPipelinePayload(now)
+  const task = loadOpportunityPipelinePayload(now, closedRange)
     .then((payload) => {
       writeCache(opportunityPipelineCache, cacheKey, payload);
       return payload;

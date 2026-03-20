@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { getOpportunityPipelinePayload } from "@backend/domains/sales";
+import { getOpportunityPipelinePayload } from "@backend/domains/sales/opportunity-pipeline";
+import { type PipelineClosedRange } from "@contracts/sales";
 
 const SUCCESS_CACHE_CONTROL = "s-maxage=120, stale-while-revalidate=300";
 const ROUTE_TIMEOUT_MS = Number(process.env.SF_ROUTE_TIMEOUT_MS ?? 15_000);
+const DEFAULT_CLOSED_RANGE: PipelineClosedRange = "ytd";
 
 class RouteTimeoutError extends Error {
   constructor(message: string) {
@@ -36,6 +38,12 @@ const getRequestId = (request: Request): string =>
   request.headers.get("x-vercel-id") ??
   crypto.randomUUID();
 
+const getClosedRange = (request: Request): PipelineClosedRange => {
+  const value = new URL(request.url).searchParams.get("closedRange");
+
+  return value === "all" ? "all" : DEFAULT_CLOSED_RANGE;
+};
+
 const toErrorResponse = (
   requestId: string,
   message: string,
@@ -60,11 +68,12 @@ const toErrorResponse = (
 
 export const GET = async (request: Request): Promise<NextResponse> => {
   const requestId = getRequestId(request);
+  const closedRange = getClosedRange(request);
   const startedAt = Date.now();
 
   try {
     const { payload, cacheHit } = await withTimeout(
-      getOpportunityPipelinePayload(),
+      getOpportunityPipelinePayload(new Date(), { closedRange }),
       ROUTE_TIMEOUT_MS,
       "Salesforce pipeline request",
     );
@@ -74,6 +83,7 @@ export const GET = async (request: Request): Promise<NextResponse> => {
         event: "sf_pipeline_success",
         route: "/api/sf/pipeline",
         requestId,
+        closedRange,
         cacheHit,
         opportunities: payload.deals.length,
         latencyMs: Date.now() - startedAt,
@@ -85,6 +95,7 @@ export const GET = async (request: Request): Promise<NextResponse> => {
       headers: {
         "Cache-Control": SUCCESS_CACHE_CONTROL,
         "x-sf-cache": cacheHit ? "hit" : "miss",
+        "x-sf-closed-range": closedRange,
       },
     });
   } catch (error) {
@@ -96,6 +107,7 @@ export const GET = async (request: Request): Promise<NextResponse> => {
         event: "sf_pipeline_error",
         route: "/api/sf/pipeline",
         requestId,
+        closedRange,
         latencyMs: Date.now() - startedAt,
         message,
         status,

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { type SfOpportunityPipelineResponse } from "@contracts/sales";
+import { type PipelineClosedRange, type SfOpportunityPipelineResponse } from "@contracts/sales";
 
 type OpportunityPipelineError = {
   error?: {
@@ -19,14 +19,23 @@ export type SalesforcePipelineState = {
 export type SalesforcePipelineFilters = {
   enabled?: boolean;
   initialData?: SfOpportunityPipelineResponse | null;
+  closedRange?: PipelineClosedRange;
+  initialDataClosedRange?: PipelineClosedRange;
 };
+
+const DEFAULT_CLOSED_RANGE: PipelineClosedRange = "ytd";
 
 export function useSalesforcePipeline(
   filters: SalesforcePipelineFilters = {},
 ): SalesforcePipelineState {
   const enabled = filters.enabled ?? true;
   const initialData = filters.initialData ?? null;
-  const skipInitialFetchRef = React.useRef(Boolean(enabled && initialData));
+  const closedRange = filters.closedRange ?? DEFAULT_CLOSED_RANGE;
+  const initialDataClosedRange = filters.initialDataClosedRange ?? DEFAULT_CLOSED_RANGE;
+  const skipInitialFetchRef = React.useRef(
+    Boolean(enabled && initialData && closedRange === initialDataClosedRange),
+  );
+  const previousClosedRangeRef = React.useRef<PipelineClosedRange>(closedRange);
   const [data, setData] = React.useState<SfOpportunityPipelineResponse | null>(initialData);
   const [loading, setLoading] = React.useState(enabled && initialData === null);
   const [error, setError] = React.useState<string | null>(null);
@@ -38,7 +47,17 @@ export function useSalesforcePipeline(
       return;
     }
 
-    if (skipInitialFetchRef.current) {
+    const closedRangeChanged = previousClosedRangeRef.current !== closedRange;
+    previousClosedRangeRef.current = closedRange;
+
+    if (closedRangeChanged && closedRange === initialDataClosedRange && initialData) {
+      React.startTransition(() => {
+        setData(initialData);
+        setError(null);
+      });
+    }
+
+    if (skipInitialFetchRef.current && closedRange === initialDataClosedRange) {
       skipInitialFetchRef.current = false;
       return;
     }
@@ -48,7 +67,11 @@ export function useSalesforcePipeline(
     setLoading(true);
     setError(null);
 
-    fetch("/api/sf/pipeline", {
+    const params = new URLSearchParams({
+      closedRange,
+    });
+
+    fetch(`/api/sf/pipeline?${params.toString()}`, {
       method: "GET",
       signal: controller.signal,
       cache: "no-store",
@@ -90,7 +113,7 @@ export function useSalesforcePipeline(
     return () => {
       controller.abort();
     };
-  }, [enabled]);
+  }, [closedRange, enabled, initialData, initialDataClosedRange]);
 
   return { data, loading, error };
 }

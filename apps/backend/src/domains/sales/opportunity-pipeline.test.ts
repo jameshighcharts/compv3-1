@@ -23,7 +23,7 @@ describe("opportunity pipeline service", () => {
       expect(query).toContain("QuoteExpirationDate__c");
       expect(query).not.toContain("Days_since_open__c");
       expect(query).not.toContain("Time_Open__c");
-      expect(query).toContain("CloseDate >= 2025-03-21");
+      expect(query).toContain("CloseDate >= 2026-01-01");
       expect(query).toContain("CloseDate <= 2026-03-20");
 
       return [
@@ -190,6 +190,50 @@ describe("opportunity pipeline service", () => {
     expect(second.cacheHit).toBe(true);
     expect(querySalesforceMock).toHaveBeenCalledTimes(1);
     expect(second.payload.deals[0]?.company).toBe("Cache Test");
+  });
+
+  it("can load all-time closed pipeline history when requested", async () => {
+    querySalesforceMock.mockImplementation(async (query: string) => {
+      expect(query).toContain("FROM Opportunity");
+      expect(query).not.toContain("CloseDate >=");
+      expect(query).not.toContain("CloseDate <=");
+
+      return [
+        {
+          Id: "006AAA0000001AT",
+          Name: "All Time Won Deal",
+          Account: { Name: "Archive Co" },
+          OwnerId: "005AAA000777",
+          Owner: { Name: "Archive Owner" },
+          Amount: 18_000,
+          Probability: 100,
+          StageName: "Closed Won",
+          ForecastCategoryName: "Closed",
+          CloseDate: "2024-02-10",
+          CreatedDate: "2023-11-01T00:00:00.000Z",
+          FiscalQuarter: 1,
+          IsClosed: true,
+          IsWon: true,
+          LastActivityDate: "2024-02-10",
+        },
+      ];
+    });
+
+    const { getOpportunityPipelinePayload } = await import("./opportunity-pipeline");
+
+    const { payload } = await getOpportunityPipelinePayload(
+      new Date("2026-03-20T12:00:00Z"),
+      { closedRange: "all" },
+    );
+
+    expect(querySalesforceMock).toHaveBeenCalledTimes(1);
+    expect(payload.deals[0]).toMatchObject({
+      company: "Archive Co",
+      ownerName: "Archive Owner",
+      stageBucket: "Won",
+      closeDate: "2024-02-10",
+      expectedCloseDate: "2024-02-10",
+    });
   });
 
   it("retries without unsupported custom Opportunity fields", async () => {

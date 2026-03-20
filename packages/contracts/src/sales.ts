@@ -220,6 +220,10 @@ export const PIPELINE_STAGE_BUCKET_VALUES = [
 
 export type PipelineStageBucket = (typeof PIPELINE_STAGE_BUCKET_VALUES)[number];
 
+export const PIPELINE_CLOSED_RANGE_VALUES = ["ytd", "all"] as const;
+
+export type PipelineClosedRange = (typeof PIPELINE_CLOSED_RANGE_VALUES)[number];
+
 const sfOpportunityPipelineDealSchema = z.object({
   id: z.string(),
   dealName: z.string(),

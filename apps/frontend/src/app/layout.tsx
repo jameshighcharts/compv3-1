@@ -4,8 +4,8 @@ import { AppShell } from "@/shared/layout/app-shell"
 import { ThemeProvider } from "@/shared/layout/theme-provider"
 
 export const metadata: Metadata = {
-  title: "Admin Dashboard",
-  description: "Shadcnblocks Admin Kit Dashboard",
+  title: "Compass",
+  description: "Compass",
 }
 
 export default function RootLayout({

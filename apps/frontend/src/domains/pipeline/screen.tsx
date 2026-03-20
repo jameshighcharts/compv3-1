@@ -2,7 +2,11 @@
 
 import * as React from "react";
 
-import type { SfOpportunityPipelineDeal, SfOpportunityPipelineResponse } from "@contracts/sales";
+import type {
+  PipelineClosedRange,
+  SfOpportunityPipelineDeal,
+  SfOpportunityPipelineResponse,
+} from "@contracts/sales";
 
 import Highcharts from "@/shared/charts/highcharts-init";
 import { DashboardHighchart, createBaseChartOptions } from "@/shared/charts/highcharts";
@@ -18,10 +22,12 @@ import {
   buildCloseQuarterOptions,
   buildDealFilterBounds,
   buildFunnelPacking,
+  buildRepresentativeFunnelDeals,
   clampRangeFilters,
   createDefaultRangeFilters,
   formatCompactCurrency,
   FUNNEL_STAGE_COLORS,
+  MAX_WON_GRID_ROWS,
   type BubblePoint,
   type FunnelPackingLayout,
   type RangeFilterKey,
@@ -462,7 +468,12 @@ export function SalesPipelineView({
 }: {
   initialData?: SfOpportunityPipelineResponse | null;
 }) {
-  const pipelineState = useSalesforcePipeline({ initialData });
+  const [closedRange, setClosedRange] = React.useState<PipelineClosedRange>("ytd");
+  const pipelineState = useSalesforcePipeline({
+    initialData,
+    closedRange,
+    initialDataClosedRange: "ytd",
+  });
   const isInitialLoading = pipelineState.loading && pipelineState.data === null;
   const allDeals = React.useMemo(
     () => pipelineState.data?.deals ?? [],
@@ -539,10 +550,12 @@ export function SalesPipelineView({
   );
   const [selectedOpportunityId, setSelectedOpportunityId] = React.useState<string | null>(null);
   const initializedRangesRef = React.useRef(false);
+  const hasAdjustedRangesRef = React.useRef(false);
 
   React.useEffect(() => {
     if (allDeals.length === 0) {
       initializedRangesRef.current = false;
+      hasAdjustedRangesRef.current = false;
       setRangeFilters(createDefaultRangeFilters(rangeBounds));
       return;
     }
@@ -550,6 +563,19 @@ export function SalesPipelineView({
     setRangeFilters((current) => {
       if (!initializedRangesRef.current) {
         initializedRangesRef.current = true;
+        return createDefaultRangeFilters(rangeBounds);
+      }
+
+      if (
+        !hasAdjustedRangesRef.current &&
+        (
+          current.dealSize[1] < rangeBounds.maxDealSize ||
+          current.probability[1] < rangeBounds.maxProbability ||
+          current.daysOpen[1] < rangeBounds.maxDaysOpen ||
+          current.timeOpen[1] < rangeBounds.maxTimeOpen ||
+          current.lastActivityDays[1] < rangeBounds.maxLastActivityDays
+        )
+      ) {
         return createDefaultRangeFilters(rangeBounds);
       }
 
@@ -576,6 +602,7 @@ export function SalesPipelineView({
     setOwnerFilter("all");
     setStatusFilter("all");
     setQuarterFilter("all");
+    hasAdjustedRangesRef.current = false;
     setRangeFilters(createDefaultRangeFilters(rangeBounds));
   }, [rangeBounds]);
 
@@ -628,6 +655,7 @@ export function SalesPipelineView({
     () => new Set(filteredDeals.map((deal) => deal.id)),
     [filteredDeals],
   );
+  const deferredFilteredDeals = React.useDeferredValue(filteredDeals);
 
   React.useEffect(() => {
     if (selectedOpportunityId && !filteredDealIds.has(selectedOpportunityId)) {
@@ -658,11 +686,21 @@ export function SalesPipelineView({
     [filteredDeals],
   );
 
+  const representativeFunnelDeals = React.useMemo(
+    () => buildRepresentativeFunnelDeals(deferredFilteredDeals),
+    [deferredFilteredDeals],
+  );
+
+  const representativeFunnelDealIds = React.useMemo(
+    () => new Set(representativeFunnelDeals.map((deal) => deal.id)),
+    [representativeFunnelDeals],
+  );
+
   const funnelPacking = React.useMemo(
-    // Keep the funnel layout stable across filter changes so we only solve the expensive packer
-    // when the underlying Salesforce payload changes.
-    () => buildFunnelPacking(allVisibleDeals),
-    [allVisibleDeals],
+    // Pack a representative slice instead of every visible deal. The exact stage counts and values
+    // still come from the full filtered dataset below.
+    () => buildFunnelPacking(representativeFunnelDeals),
+    [representativeFunnelDeals],
   );
 
   const stageFilterKpis = React.useMemo(() => {
@@ -690,10 +728,12 @@ export function SalesPipelineView({
         name: stage,
         color: FUNNEL_STAGE_COLORS[stage],
         data: funnelPacking.points.filter(
-          (point) => point.stage === stage && filteredDealIds.has(point.id),
+          (point) =>
+            point.stage === stage &&
+            representativeFunnelDealIds.has(point.id),
         ),
       })),
-    [filteredDealIds, funnelPacking.points],
+    [funnelPacking.points, representativeFunnelDealIds],
   );
 
   const funnelChartOptions = React.useMemo(
@@ -757,7 +797,7 @@ export function SalesPipelineView({
   }, [filteredPipelineDeals, filteredWonDeals, scopedClosedDeals, scopedLostDeals, scopedWonDeals]);
 
   const wonGridOptions = React.useMemo(
-    () => buildWonGridOptions(filteredWonDeals),
+    () => buildWonGridOptions(filteredWonDeals.slice(0, MAX_WON_GRID_ROWS)),
     [filteredWonDeals],
   );
 
@@ -770,6 +810,7 @@ export function SalesPipelineView({
     () => filteredDeals.find((deal) => deal.id === selectedOpportunityId) ?? null,
     [filteredDeals, selectedOpportunityId],
   );
+  const closedRangeLabel = closedRange === "all" ? "All time" : "YTD";
 
   return (
     <>
@@ -826,6 +867,7 @@ export function SalesPipelineView({
                       <CardDescription>
                         {filteredDeals.length} visible of {scopedVisibleDeals.length} open or won opportunities
                         {` · ${scopedLostDeals.length} closed-lost in scope`}
+                        {` · closed history ${closedRangeLabel}`}
                         {pipelineState.loading ? " · Refreshing live data" : ""}
                       </CardDescription>
                     </div>
@@ -868,6 +910,27 @@ export function SalesPipelineView({
                           ))}
                         </SelectContent>
                       </Select>
+
+                      <div className="flex items-center rounded-lg border border-border/70 p-1">
+                        {(["ytd", "all"] as const).map((value) => {
+                          const active = closedRange === value;
+
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setClosedRange(value)}
+                              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                                active
+                                  ? "bg-primary text-primary-foreground"
+                                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                              }`}
+                            >
+                              {value === "ytd" ? "Closed YTD" : "Closed all time"}
+                            </button>
+                          );
+                        })}
+                      </div>
 
                       <Button variant="outline" size="sm" onClick={resetFilters}>
                         Reset filters
@@ -926,10 +989,14 @@ export function SalesPipelineView({
                       step={filter.step}
                       value={rangeFilters[filter.key]}
                       onValueChange={(values) =>
-                        setRangeFilters((current) => ({
-                          ...current,
-                          [filter.key]: sortRange(values),
-                        }))
+                        {
+                          hasAdjustedRangesRef.current = true;
+
+                          setRangeFilters((current) => ({
+                            ...current,
+                            [filter.key]: sortRange(values),
+                          }));
+                        }
                       }
                     />
                   </div>
@@ -942,7 +1009,7 @@ export function SalesPipelineView({
                 <div className="flex flex-col gap-2">
                   <CardTitle className="text-base">Pipeline Funnel</CardTitle>
                   <CardDescription>
-                    Stage distribution, counts, and value for the filtered Opportunity set
+                    Representative deal sample for the filtered Opportunity set. Stage counts and values remain exact.
                   </CardDescription>
                 </div>
               </CardHeader>
@@ -998,7 +1065,9 @@ export function SalesPipelineView({
               <Card className="col-span-5 gap-0 py-0 xl:col-span-2">
                 <CardHeader className="p-5 pb-2">
                   <CardTitle className="text-base">Latest Sales</CardTitle>
-                  <CardDescription>Closed-won opportunities in the current manager scope</CardDescription>
+                  <CardDescription>
+                    Latest {Math.min(filteredWonDeals.length, MAX_WON_GRID_ROWS)} closed-won opportunities in the current manager scope · {closedRangeLabel}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0 pb-2">
                   <HighchartsGridPro options={wonGridOptions} className="sp-pipeline-grid h-[220px]" />

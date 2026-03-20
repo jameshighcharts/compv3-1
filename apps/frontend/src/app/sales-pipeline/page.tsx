@@ -1,9 +1,8 @@
-import { getOpportunityPipelinePayload } from "@backend/domains/sales";
 import { type SfOpportunityPipelineResponse } from "@contracts/sales";
+import { unstable_noStore as noStore } from "next/cache";
 
 import { SalesPipelineView } from "@/domains/pipeline/screen";
 
-export const dynamic = "force-dynamic";
 const PRELOAD_TIMEOUT_MS = Number(process.env.SF_PIPELINE_PRELOAD_TIMEOUT_MS ?? 2_500);
 
 async function withTimeout<T>(
@@ -29,7 +28,16 @@ async function withTimeout<T>(
 }
 
 async function loadInitialPipelineData(): Promise<SfOpportunityPipelineResponse | null> {
+  if (process.env.NODE_ENV !== "production") {
+    return null;
+  }
+
   try {
+    noStore();
+
+    const { getOpportunityPipelinePayload } = await import(
+      "@backend/domains/sales/opportunity-pipeline"
+    );
     const payload = await withTimeout(
       getOpportunityPipelinePayload().then(({ payload: responsePayload }) => responsePayload),
       PRELOAD_TIMEOUT_MS,

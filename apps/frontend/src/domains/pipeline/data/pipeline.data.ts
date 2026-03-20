@@ -56,6 +56,15 @@ export type FunnelPackingLayout = {
   zMax: number;
 };
 
+const FUNNEL_STAGE_SAMPLE_LIMITS: Record<StageName, number> = {
+  Scoping: 40,
+  Proposal: 96,
+  Committed: 56,
+  Won: 96,
+};
+
+export const MAX_WON_GRID_ROWS = 100;
+
 type SizeModel = {
   minFraction: number;
   maxFraction: number;
@@ -108,7 +117,7 @@ const HC_SMALLER = Math.min(PX_W, PX_H);
 const PACK_GAP = 1;
 const SECTION_X_INSET = 0.01;
 const SECTION_Y_INSET = 0.975;
-const TARGET_FILL_RATIO = 0.86;
+const TARGET_FILL_RATIO = 0.9;
 const RELAX_STEPS = 600;
 const OVERLAP_PUSH_BASE = 0.75;
 const OVERLAP_PUSH_COOLING = 0.2;
@@ -160,6 +169,42 @@ function compareQuarterLabels(left: string, right: string): number {
   }
 
   return Number(leftMatch[1]) - Number(rightMatch[1]);
+}
+
+function compareDateAsc(left: string | null, right: string | null): number {
+  const leftValue = left ?? "9999-12-31";
+  const rightValue = right ?? "9999-12-31";
+
+  return leftValue.localeCompare(rightValue);
+}
+
+function compareDateDesc(left: string | null, right: string | null): number {
+  const leftValue = left ?? "";
+  const rightValue = right ?? "";
+
+  return rightValue.localeCompare(leftValue);
+}
+
+function compareRepresentativeDeals(
+  left: SfOpportunityPipelineDeal,
+  right: SfOpportunityPipelineDeal,
+): number {
+  if (left.isWon || right.isWon) {
+    return (
+      compareDateDesc(left.closeDate, right.closeDate) ||
+      right.amount - left.amount ||
+      right.probability - left.probability ||
+      left.dealName.localeCompare(right.dealName)
+    );
+  }
+
+  return (
+    right.amount - left.amount ||
+    right.probability - left.probability ||
+    compareDateAsc(left.expectedCloseDate ?? left.closeDate, right.expectedCloseDate ?? right.closeDate) ||
+    compareDateDesc(left.lastActivityDate, right.lastActivityDate) ||
+    left.dealName.localeCompare(right.dealName)
+  );
 }
 
 function makeSizeModel(scale: number): SizeModel {
@@ -805,6 +850,32 @@ export function buildCloseQuarterOptions(
         .filter((quarter) => quarter && quarter !== "Unknown"),
     ),
   ).sort(compareQuarterLabels);
+}
+
+export function buildRepresentativeFunnelDeals(
+  deals: readonly SfOpportunityPipelineDeal[],
+): SfOpportunityPipelineDeal[] {
+  const sampledDeals: SfOpportunityPipelineDeal[] = [];
+
+  for (const stage of STAGE_NAMES) {
+    const limit = FUNNEL_STAGE_SAMPLE_LIMITS[stage];
+    const sortedStageDeals = deals
+      .filter((deal) => deal.stageBucket === stage)
+      .slice()
+      .sort(compareRepresentativeDeals);
+
+    const stageDeals =
+      sortedStageDeals.length <= limit
+        ? sortedStageDeals
+        : Array.from({ length: limit }, (_, index) => {
+            const sampledIndex = Math.floor((index * sortedStageDeals.length) / limit);
+            return sortedStageDeals[sampledIndex]!;
+          });
+
+    sampledDeals.push(...stageDeals);
+  }
+
+  return sampledDeals;
 }
 
 export function buildFunnelPacking(
