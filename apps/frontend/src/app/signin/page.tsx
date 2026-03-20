@@ -31,6 +31,8 @@ function getErrorMessage(errorType?: string) {
       return "Slack OAuth is not configured yet."
     case "SlackWorkspaceRestricted":
       return "Use the approved Slack workspace to sign in."
+    case "SlackEmailDomainRestricted":
+      return "Use an approved work email address to sign in."
     default:
       return errorType ? "Authentication failed. Try again." : null
   }

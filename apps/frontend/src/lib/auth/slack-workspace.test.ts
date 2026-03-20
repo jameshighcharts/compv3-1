@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  getSlackProfileEmail,
   getSlackProfileTeamId,
+  isAllowedSlackEmailDomain,
   isAllowedSlackWorkspace,
+  parseAllowedEmailDomains,
   normalizeSlackTeamId,
 } from "@/lib/auth/slack-workspace"
 
@@ -47,6 +50,63 @@ describe("isAllowedSlackWorkspace", () => {
       isAllowedSlackWorkspace(
         { "https://slack.com/team_id": "TOTHER123" },
         "T07UR9NFJ"
+      )
+    ).toBe(false)
+  })
+})
+
+describe("parseAllowedEmailDomains", () => {
+  it("normalizes and deduplicates domains", () => {
+    expect(
+      parseAllowedEmailDomains(" Highsoft.com,highsoft.com, highcharts.com ")
+    ).toEqual(["highsoft.com", "highcharts.com"])
+  })
+
+  it("returns an empty list when unset", () => {
+    expect(parseAllowedEmailDomains(undefined)).toEqual([])
+  })
+})
+
+describe("getSlackProfileEmail", () => {
+  it("normalizes the email address", () => {
+    expect(
+      getSlackProfileEmail({
+        email: " JamesM.Haugen@Highsoft.com ",
+      })
+    ).toBe("jamesm.haugen@highsoft.com")
+  })
+})
+
+describe("isAllowedSlackEmailDomain", () => {
+  it("allows matching domains", () => {
+    expect(
+      isAllowedSlackEmailDomain(
+        {
+          email: "jamesm.haugen@highsoft.com",
+        },
+        ["highsoft.com"]
+      )
+    ).toBe(true)
+  })
+
+  it("rejects non-matching domains", () => {
+    expect(
+      isAllowedSlackEmailDomain(
+        {
+          email: "jamesm.haugen@example.com",
+        },
+        ["highsoft.com"]
+      )
+    ).toBe(false)
+  })
+
+  it("rejects when the allowlist is empty", () => {
+    expect(
+      isAllowedSlackEmailDomain(
+        {
+          email: "jamesm.haugen@highsoft.com",
+        },
+        []
       )
     ).toBe(false)
   })

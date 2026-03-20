@@ -4,17 +4,23 @@ import type { SlackProfile } from "next-auth/providers/slack"
 import Slack from "next-auth/providers/slack"
 
 import {
+  isAllowedSlackEmailDomain,
   isAllowedSlackWorkspace,
+  parseAllowedEmailDomains,
   normalizeSlackTeamId,
 } from "@/lib/auth/slack-workspace"
 
 const allowedSlackTeamId = normalizeSlackTeamId(process.env.AUTH_SLACK_TEAM_ID)
+const allowedSlackEmailDomains = parseAllowedEmailDomains(
+  process.env.AUTH_SLACK_ALLOWED_EMAIL_DOMAINS
+)
 
 export const isSlackConfigured = Boolean(
   process.env.AUTH_SECRET &&
     process.env.AUTH_SLACK_ID &&
     process.env.AUTH_SLACK_SECRET &&
-    allowedSlackTeamId
+    allowedSlackTeamId &&
+    allowedSlackEmailDomains.length > 0
 )
 
 const providers: Provider[] =
@@ -65,6 +71,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         )
       ) {
         return "/signin?error=SlackWorkspaceRestricted"
+      }
+
+      if (
+        !isAllowedSlackEmailDomain(
+          profile as Partial<SlackProfile> | undefined,
+          allowedSlackEmailDomains
+        )
+      ) {
+        return "/signin?error=SlackEmailDomainRestricted"
       }
 
       return true

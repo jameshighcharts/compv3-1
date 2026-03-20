@@ -32,6 +32,7 @@ For Slack sign-in with Auth.js, also set:
 - `AUTH_SLACK_ID`
 - `AUTH_SLACK_SECRET`
 - `AUTH_SLACK_TEAM_ID`
+- `AUTH_SLACK_ALLOWED_EMAIL_DOMAINS`
 
 Optional:
 
@@ -53,6 +54,12 @@ The app uses `AUTH_SLACK_TEAM_ID` to do two things:
 
 - hint Slack to open that workspace during sign-in
 - reject any callback that returns from a different Slack workspace
+
+The app uses `AUTH_SLACK_ALLOWED_EMAIL_DOMAINS` as a comma-separated backend allowlist.
+Example:
+
+- `AUTH_SLACK_ALLOWED_EMAIL_DOMAINS=highsoft.com`
+- `AUTH_SLACK_ALLOWED_EMAIL_DOMAINS=highsoft.com,highcharts.com`
 
 ## Query Salesforce With SOQL (`sf` CLI)
 
