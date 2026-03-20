@@ -32,6 +32,7 @@ export const navGeneral: SidebarNavItem[] = [
     defaultOpen: true,
     subItems: [
       { title: "Sales", href: "/" },
+      { title: "Strategy Initiatives", href: "/strategy-initiatives" },
       // { title: "Marketing", href: "/dashboard-2" },
       { title: "ARR Template", href: "/vikingsaas" },
       // { title: "Dashboard 3", href: "/dashboard-3" },

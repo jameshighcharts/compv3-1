@@ -327,7 +327,8 @@ function ArrGrowthPanel({ data }: { data?: SfScorecardArrResponse | null }) {
             <DashboardHighchart options={makeWaterfallOptions(organicBridge)} />
           </ChartBox>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+          <DefBlock title="Rolling 12M ARR" body={`$${data.bridges.totalArr.closingArr.toLocaleString("en-US")} at the close of ${data.latestFullMonthLabel}. This is a closing ARR stock, not a 12-month sum.`} />
           <DefBlock title="Total ARR Growth" body={`${data.trailingTwelveMonths.totalArrGrowthPct.toFixed(1)}% versus the same month one year earlier.`} />
           <DefBlock title="Organic ARR Growth" body={`${data.trailingTwelveMonths.organicArrGrowthPct.toFixed(1)}% from the opening ARR-bearing cohort.`} />
           <DefBlock title="New Sales ARR Growth" body={`${data.trailingTwelveMonths.newSalesArrGrowthPct.toFixed(1)}% on annual new-logo ARR only.`} />

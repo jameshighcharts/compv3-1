@@ -5,10 +5,10 @@ import * as React from "react";
 import {
   IconBell,
   IconChartBar,
-  IconChartLine,
   IconCurrencyDollar,
   IconDownload,
   IconFileAnalytics,
+  IconHome,
 } from "@tabler/icons-react";
 
 import { DatePicker } from "@/shared/ui/date-picker";
@@ -52,8 +52,16 @@ export default function SalesDashboardScreen() {
         </div>
       </div>
 
-      <Tabs defaultValue="sales-revenue" className="space-y-4">
+      <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
+          <TabsTrigger
+            value="overview"
+            id={TAB_IDS.overviewTrigger}
+            aria-controls={TAB_IDS.overviewContent}
+          >
+            <IconHome className="mr-1.5 size-4" />
+            Home
+          </TabsTrigger>
           <TabsTrigger
             value="sales-revenue"
             id={TAB_IDS.salesRevenueTrigger}
@@ -61,14 +69,6 @@ export default function SalesDashboardScreen() {
           >
             <IconCurrencyDollar className="mr-1.5 size-4" />
             Sales Revenue
-          </TabsTrigger>
-          <TabsTrigger
-            value="overview"
-            id={TAB_IDS.overviewTrigger}
-            aria-controls={TAB_IDS.overviewContent}
-          >
-            <IconChartLine className="mr-1.5 size-4" />
-            ARR
           </TabsTrigger>
           <TabsTrigger
             value="analytics"

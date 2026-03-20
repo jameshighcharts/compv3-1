@@ -211,6 +211,101 @@ export const sfTopDealsResponseSchema = z.object({
 export type SfTopDeal = z.infer<typeof sfTopDealSchema>;
 export type SfTopDealsResponse = z.infer<typeof sfTopDealsResponseSchema>;
 
+export const PIPELINE_STAGE_BUCKET_VALUES = [
+  "Scoping",
+  "Proposal",
+  "Committed",
+  "Won",
+] as const;
+
+export type PipelineStageBucket = (typeof PIPELINE_STAGE_BUCKET_VALUES)[number];
+
+export const PIPELINE_CLOSED_RANGE_VALUES = ["ytd", "all"] as const;
+
+export type PipelineClosedRange = (typeof PIPELINE_CLOSED_RANGE_VALUES)[number];
+
+const sfOpportunityPipelineDealSchema = z.object({
+  id: z.string(),
+  dealName: z.string(),
+  company: z.string(),
+  ownerId: z.string().nullable(),
+  ownerName: z.string(),
+  amount: z.number(),
+  probability: z.number(),
+  stageName: z.string(),
+  stageBucket: z.enum(PIPELINE_STAGE_BUCKET_VALUES),
+  stageStatus: z.string().nullable(),
+  forecastCategory: z.string().nullable(),
+  createdDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  closeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  expectedCloseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  closeQuarter: z.string(),
+  daysOpen: z.number(),
+  timeOpen: z.number(),
+  isClosed: z.boolean(),
+  isWon: z.boolean(),
+  wooOrderId: z.string().nullable(),
+  lastActivityDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  lastActivityDays: z.number().nullable(),
+  lossReason: z.string().nullable(),
+});
+
+export const sfOpportunityPipelineResponseSchema = z.object({
+  asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  deals: z.array(sfOpportunityPipelineDealSchema),
+});
+
+export type SfOpportunityPipelineDeal = z.infer<typeof sfOpportunityPipelineDealSchema>;
+export type SfOpportunityPipelineResponse = z.infer<typeof sfOpportunityPipelineResponseSchema>;
+
+export const STRATEGY_INITIATIVE_KEYS = [
+  "Woodes",
+  "Morningstar",
+  "Grid",
+] as const;
+
+export type StrategyInitiativeKey = (typeof STRATEGY_INITIATIVE_KEYS)[number];
+
+const sfStrategyInitiativeSummarySchema = z.object({
+  key: z.enum(STRATEGY_INITIATIVE_KEYS),
+  label: z.string(),
+  sourceObject: z.enum(["Opportunity", "woo_OrderLine__c"]),
+  rule: z.string(),
+  totalRevenue: z.number(),
+  ytdRevenue: z.number(),
+  recordCount: z.number().int(),
+});
+
+const sfStrategyInitiativeMonthSchema = z.object({
+  monthStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  monthLabel: z.string(),
+  year: z.number().int(),
+  month: z.number().int(),
+  woodes: z.number(),
+  morningstar: z.number(),
+  grid: z.number(),
+  combined: z.number(),
+});
+
+export const sfStrategyInitiativesResponseSchema = z.object({
+  asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  fromMonth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  toMonth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  currentYear: z.number().int(),
+  previousYear: z.number().int(),
+  ytdMonth: z.number().int(),
+  ytdCurrentRevenue: z.number(),
+  ytdPreviousRevenue: z.number(),
+  ytdDiffRevenue: z.number(),
+  ytdDiffPct: z.number().nullable(),
+  initiatives: z.array(sfStrategyInitiativeSummarySchema),
+  monthly: z.array(sfStrategyInitiativeMonthSchema),
+});
+
+export type SfStrategyInitiativeSummary = z.infer<typeof sfStrategyInitiativeSummarySchema>;
+export type SfStrategyInitiativeMonth = z.infer<typeof sfStrategyInitiativeMonthSchema>;
+export type SfStrategyInitiativesResponse = z.infer<typeof sfStrategyInitiativesResponseSchema>;
+
 const sfScorecardArrMonthlyFlowSchema = z.object({
   monthStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   monthLabel: z.string(),

@@ -320,11 +320,15 @@ const runCliAuthCommand = async (
     maxBuffer: 10 * 1024 * 1024,
   });
 
-  if (stderr.trim()) {
-    console.error(stderr.trim());
-  }
+  try {
+    return parseCliAuthPayload(stdout, sourceLabel);
+  } catch (error) {
+    if (stderr.trim()) {
+      console.error(stderr.trim());
+    }
 
-  return parseCliAuthPayload(stdout, sourceLabel);
+    throw error;
+  }
 };
 
 const getEnvAuth = (): SalesforceAuth | null => {

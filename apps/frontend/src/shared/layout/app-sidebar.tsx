@@ -48,8 +48,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               >
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                   <Image
-                    src="/highcharts.svg"
-                    alt="Highcharts"
+                    src="/compass.svg"
+                    alt="Compass"
                     width={16}
                     height={16}
                     className="size-4"

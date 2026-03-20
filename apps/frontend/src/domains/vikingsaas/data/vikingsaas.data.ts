@@ -19,21 +19,15 @@ export const HEX_TO_PANEL: Partial<Record<number, string>> = {
   2:  "arr-growth",
   3:  "arr-growth",
   4:  "arr-growth",
+  10: "arr-growth",
   5:  "arr-growth",
   6:  "churn",
   7:  "churn",
-  8:  "rule40",
-  9:  "saas-gm",
   14: "nrr",
-  15: "cac-payback",
-  16: "ltv-cac",
-  19: "sm-pct",
-  20: "rd-pct",
   21: "concentration",
   22: "concentration",
   23: "concentration",
   24: "concentration",
-  25: "arr-ftes",
 };
 
 // ── Panel metadata ────────────────────────────────────────────────────────────
